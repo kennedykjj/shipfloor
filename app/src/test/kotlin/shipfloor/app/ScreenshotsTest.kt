@@ -14,6 +14,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
+import javax.imageio.ImageIO
 import java.time.LocalDate
 import org.assertj.core.api.Assertions.assertThat
 import org.jetbrains.skia.EncodedImageFormat
@@ -121,6 +122,18 @@ class ScreenshotsTest {
             val narrow = out.resolve("factory-$name-1000.png")
             render(1000, 700, narrow) { FactoryContent(dark) }
             assertThat(Files.size(narrow)).isGreaterThan(10_000L)
+        }
+    }
+
+    @Test
+    fun `renders the tray icon at its sizes to PNG files`() {
+        val out = Path.of("build", "screens").also { Files.createDirectories(it) }
+        TrayIcons.SIZES.forEach { size ->
+            listOf(false to "idle", true to "waiting").forEach { (waiting, name) ->
+                val file = out.resolve("tray-$size-$name.png")
+                ImageIO.write(TrayIcons.render(size, waiting), "png", file.toFile())
+                assertThat(Files.size(file)).isGreaterThan(100L)
+            }
         }
     }
 

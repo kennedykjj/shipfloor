@@ -315,7 +315,7 @@ fun main() {
         Window(
             onCloseRequest = ::exitApplication,
             title = Texts.TITLE,
-            icon = remember { BitmapPainter(TrayIcons.render(256, waiting = false).toComposeImageBitmap()) },
+            icon = remember { BitmapPainter(TrayIcons.renderTile(256).toComposeImageBitmap()) },
             state = rememberWindowState(size = DpSize(1280.dp, 800.dp), position = WindowPosition.PlatformDefault),
             onPreviewKeyEvent = ::onPaletteKey,
         ) {
