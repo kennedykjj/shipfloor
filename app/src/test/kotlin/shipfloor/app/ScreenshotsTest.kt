@@ -163,7 +163,7 @@ class ScreenshotsTest {
                     view = ScreenFixtures.view(),
                     pulse = ScreenFixtures.pulse(),
                     connected = true,
-                    initialLayout = if (chips) ColumnLayoutState().withDensity(BoardDensity.CHIPS) else ColumnLayoutState(),
+                    initialDensity = if (chips) BoardDensity.CHIPS else BoardDensity.CARDS,
                     openCardId = if (openCard) "7c113339-0000" else null,
                     panelWidth = 520.dp,
                     sidePanel = { width ->

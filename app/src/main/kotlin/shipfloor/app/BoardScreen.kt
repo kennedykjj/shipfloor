@@ -16,6 +16,17 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -98,6 +109,23 @@ private val MAP_BOX_MIN_WIDTH = 12.dp
 private val MAP_COUNT_MIN_WIDTH = 24.dp
 private val EDGE_FADE_WIDTH = 24.dp
 
+/** The two lanes of the board: the columns up to the approved spec, then from the code to Done. */
+internal val LANE_ONE = listOf(
+    BoardColumn.INBOX, BoardColumn.READY_FOR_REFINEMENT, BoardColumn.REFINEMENT, BoardColumn.SPEC_REVIEW, BoardColumn.READY_FOR_DEV,
+)
+internal val LANE_TWO = listOf(
+    BoardColumn.CODING, BoardColumn.VALIDATION, BoardColumn.STAGED, BoardColumn.READY_FOR_PROD, BoardColumn.DONE,
+)
+private const val DONE_SHOWN = 4
+private val COLUMN_MIN_HEIGHT = 112.dp
+
+/**
+ * The board: ten columns in product order, laid out in two lanes of five so that all of them are in view and an
+ * empty one is still a column. [view] is null until the first snapshot; [connected] false dims the last known state
+ * and says so. With a [controller] the owner moves cards (drag, `M` on a focused card, or the buttons of a card that
+ * waits for a decision); without one the board is read only. Titles are external text: drawn as plain text, never
+ * interpreted.
+ */
 @Composable
 fun BoardScreen(
     view: BoardView?,
@@ -108,7 +136,7 @@ fun BoardScreen(
     openCardId: String? = null,
     focusReturnCardId: String? = null,
     onOpenCard: (String) -> Unit = {},
-    initialLayout: ColumnLayoutState = ColumnLayoutState(),
+    initialDensity: BoardDensity = BoardDensity.CARDS,
 ) {
     val scope = rememberCoroutineScope()
     var reloading by remember { mutableStateOf(false) }
@@ -116,8 +144,9 @@ fun BoardScreen(
     val laneBounds = remember { mutableStateMapOf<BoardColumn, Rect>() }
     val move by (controller?.state ?: remember { MutableStateFlow(OwnerMoveState()) }).collectAsState()
     val scrollState = rememberScrollState()
-    var viewportPx by remember { mutableStateOf(0) }
-    var layout by remember { mutableStateOf(initialLayout) }
+    var laneTwoTop by remember { mutableStateOf(0) }
+    var density by remember { mutableStateOf(initialDensity) }
+    var doneExpanded by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier.fillMaxSize().background(Tokens.ground).padding(top = 12.dp).semantics { contentDescription = Texts.BOARD },
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -130,7 +159,7 @@ fun BoardScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    LayoutControls(layout) { layout = it }
+                    LayoutControls(density) { density = it }
                     if (onReload != null) {
                         ReloadButton(reloading) {
                             if (!reloading) {
@@ -178,59 +207,67 @@ fun BoardScreen(
         }
         val board = view?.board
         val held = move.held
-        val density = LocalDensity.current.density
-        val viewportDp = (viewportPx / density).roundToInt()
-        val counts = BoardColumn.entries.associateWith { board?.cardsIn(it)?.size ?: 1 }
-        val widths = columnWidths(layout, counts, viewportDp, LANE_GAP)
+        val counts = BoardColumn.entries.associateWith { board?.cardsIn(it)?.size ?: 0 }
         Column(modifier = Modifier.fillMaxSize().alpha(if (connected) 1f else 0.55f)) {
             Box(Modifier.padding(horizontal = 20.dp)) {
                 ColumnStrip(
-                    map = boardMap(
-                        board ?: Board(emptyList(), null),
-                        widths,
-                        LANE_GAP,
-                        viewportDp,
-                        (scrollState.value / density).roundToInt(),
-                    ),
+                    counts = counts,
                     enabled = connected,
                     onGo = { column ->
-                        val target = scrollTarget(column, widths, LANE_GAP, viewportDp)
-                        scope.launch { scrollState.scrollTo((target * density).roundToInt()) }
+                        scope.launch { scrollState.animateScrollTo(if (column in LANE_ONE) 0 else laneTwoTop) }
                     },
                 )
             }
             Spacer(Modifier.height(14.dp))
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .drawBehind { drawLine(Tokens.edge, Offset(0f, 0.5f), Offset(size.width, 0.5f), 1.dp.toPx()) }
-                    .onSizeChanged { viewportPx = it.width },
+                    .verticalScroll(scrollState),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxSize().horizontalScroll(scrollState),
-                    horizontalArrangement = Arrangement.spacedBy(LANE_GAP.dp),
+                val waiting = (counts[BoardColumn.SPEC_REVIEW] ?: 0) + (counts[BoardColumn.STAGED] ?: 0)
+                LaneGroup(
+                    title = Texts.LANE_REFINE,
+                    subtitle = Texts.LANE_REFINE_SUB,
+                    count = LANE_ONE.sumOf { counts.getValue(it) }.toString(),
+                    trailing = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            BasicText(Texts.LANE_HAND_OFF, style = TextStyle(fontFamily = sans, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Tokens.faint))
+                            IconGlyph(AppIcon.ARROW_DOWN, Tokens.faint, size = 13.dp)
+                        }
+                    },
                 ) {
-                    BoardColumn.entries.forEach { column ->
-                        val accepts = held != null && column in move.targets
-                        Lane(
-                            width = widths.getValue(column),
-                            layout = layout,
-                            onLayout = { layout = it },
-                            column = column,
-                            cards = board?.cardsIn(column),
-                            time = view?.columnTimes?.get(column),
-                            controller = controller,
-                            accepts = accepts,
-                            dimmed = held != null && !accepts,
-                            laneBounds = laneBounds,
-                            scope = scope,
-                            openCardId = openCardId,
-                            focusReturnCardId = focusReturnCardId,
-                            onOpenCard = onOpenCard,
+                    LANE_ONE.forEachIndexed { index, column ->
+                        LaneColumn(
+                            column, index, board?.cardsIn(column), view?.columnTimes?.get(column), density, controller, held, move,
+                            laneBounds, scope, openCardId, focusReturnCardId, onOpenCard, doneExpanded, { doneExpanded = it },
+                            Modifier.weight(1f).fillMaxHeight(),
                         )
                     }
                 }
-                EdgeFadeOverlays(scrollState)
+                LaneGroup(
+                    title = Texts.LANE_DELIVER,
+                    subtitle = Texts.LANE_DELIVER_SUB,
+                    count = "${LANE_TWO.filter { it != BoardColumn.DONE }.sumOf { counts.getValue(it) }} + ${counts.getValue(BoardColumn.DONE)}",
+                    trailing = {
+                        if (waiting > 0) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(7.dp).background(Tokens.accent, CircleShape))
+                                BasicText(Texts.waitingForYou(waiting), style = TextStyle(fontFamily = sans, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Tokens.sand))
+                            }
+                        }
+                    },
+                    modifier = Modifier.onGloballyPositioned { laneTwoTop = it.positionInParent().y.roundToInt() },
+                    last = true,
+                ) {
+                    LANE_TWO.forEachIndexed { index, column ->
+                        LaneColumn(
+                            column, index, board?.cardsIn(column), view?.columnTimes?.get(column), density, controller, held, move,
+                            laneBounds, scope, openCardId, focusReturnCardId, onOpenCard, doneExpanded, { doneExpanded = it },
+                            Modifier.weight(1f).fillMaxHeight(),
+                        )
+                    }
+                }
             }
         }
     }
@@ -244,18 +281,10 @@ internal fun stripLabel(column: BoardColumn): String =
         else -> column.displayName
     }
 
-/** One cell per column with its count and name; the cells in view carry a line, and a click scrolls to the column. */
+/** One cell per column with its count and name; a click scrolls to the lane of the column. */
 @Composable
-private fun ColumnStrip(map: BoardMap, enabled: Boolean, onGo: (BoardColumn) -> Unit) {
+private fun ColumnStrip(counts: Map<BoardColumn, Int>, enabled: Boolean, onGo: (BoardColumn) -> Unit) {
     val shape = RoundedCornerShape(8.dp)
-    val total = map.boxes.sumOf { it.share.toDouble() }.toFloat().coerceAtLeast(Float.MIN_VALUE)
-    var cursor = 0f
-    val inView = map.boxes.map { box ->
-        val from = cursor / total
-        cursor += box.share
-        val to = cursor / total
-        from < map.viewStart + map.viewShare && to > map.viewStart
-    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -265,41 +294,40 @@ private fun ColumnStrip(map: BoardMap, enabled: Boolean, onGo: (BoardColumn) -> 
             .border(1.dp, Tokens.edge, shape)
             .semantics { contentDescription = Texts.COLUMN_MAP },
     ) {
-        map.boxes.forEachIndexed { index, box ->
-            StripCell(box, inView[index], divider = index > 0, enabled = enabled, modifier = Modifier.weight(1f).fillMaxHeight()) { onGo(box.column) }
+        BoardColumn.entries.forEachIndexed { index, column ->
+            StripCell(column, counts.getValue(column), divider = index > 0, enabled = enabled, modifier = Modifier.weight(1f).fillMaxHeight()) { onGo(column) }
         }
     }
 }
 
 @Composable
-private fun StripCell(box: MapBox, inView: Boolean, divider: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val waiting = isWaitingForOwner(box.column) && box.count > 0
+private fun StripCell(column: BoardColumn, count: Int, divider: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val waiting = isWaitingForOwner(column) && count > 0
     var focused by remember { mutableStateOf(false) }
     Box(
         modifier = modifier
             .drawBehind {
                 if (divider) drawLine(Tokens.edge, Offset(0.5f, 0f), Offset(0.5f, size.height), 1.dp.toPx())
-                if (inView) drawLine(Tokens.text.copy(alpha = 0.55f), Offset(0f, size.height - 1.dp.toPx()), Offset(size.width, size.height - 1.dp.toPx()), 2.dp.toPx())
                 if (focused) drawRect(Tokens.accent, style = Stroke(2.dp.toPx()))
             }
             .onFocusChanged { focused = it.isFocused }
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .clearAndSetSemantics { contentDescription = Texts.goToColumn(box.column, box.count) }
+            .clearAndSetSemantics { contentDescription = Texts.goToColumn(column, count) }
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
             BasicText(
-                box.count.toString(),
+                count.toString(),
                 style = TextStyle(
                     fontFamily = sans,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (box.count == 0) Tokens.faint else Tokens.text,
+                    color = if (count == 0) Tokens.faint else Tokens.text,
                     fontFeatureSettings = "tnum",
                 ),
             )
             BasicText(
-                stripLabel(box.column),
+                stripLabel(column),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = TextStyle(fontFamily = sans, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = if (waiting) Tokens.sand else Tokens.muted),
@@ -309,19 +337,46 @@ private fun StripCell(box: MapBox, inView: Boolean, divider: Boolean, enabled: B
     }
 }
 
-
-
-/** Gradient strips over the board edges, only on the side that has more to see; they never take clicks. */
+/** A lane: its bar (name, what it covers, count, a note on the right) and the row of its five columns. */
 @Composable
-private fun BoxScope.EdgeFadeOverlays(scrollState: ScrollState) {
-    val fades = edgeFades(scrollState.value, scrollState.maxValue)
-    if (fades.start) EdgeFade(Modifier.align(Alignment.CenterStart), Brush.horizontalGradient(listOf(Tokens.ground, Color.Transparent)))
-    if (fades.end) EdgeFade(Modifier.align(Alignment.CenterEnd), Brush.horizontalGradient(listOf(Color.Transparent, Tokens.ground)))
+private fun LaneGroup(
+    title: String,
+    subtitle: String,
+    count: String,
+    trailing: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    last: Boolean = false,
+    columns: @Composable RowScope.() -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .drawBehind {
+                if (!last) drawLine(Tokens.edge, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx())
+            },
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 11.dp, bottom = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            BasicText(title, style = TextStyle(fontFamily = sans, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Tokens.text))
+            BasicText(subtitle, style = TextStyle(fontFamily = sans, fontSize = 12.5.sp, color = Tokens.faint))
+            CountPill(count)
+            Spacer(Modifier.weight(1f))
+            trailing()
+        }
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), content = columns)
+    }
 }
 
 @Composable
-private fun EdgeFade(modifier: Modifier, brush: Brush) {
-    Box(modifier.width(EDGE_FADE_WIDTH).fillMaxHeight().background(brush))
+private fun CountPill(text: String) {
+    BasicText(
+        text,
+        modifier = Modifier.background(Tokens.raise, RoundedCornerShape(999.dp)).padding(horizontal = 8.dp, vertical = 1.dp),
+        style = TextStyle(fontFamily = mono, fontSize = 11.5.sp, color = Tokens.muted, fontFeatureSettings = "tnum"),
+    )
 }
 
 @Composable
@@ -456,46 +511,55 @@ private fun NoteBox(onSend: (String) -> Unit, onCancel: () -> Unit) {
     }
 }
 
+/** One column of a lane: header, then its cards, a dashed box when it is empty and a target while a card is held. */
 @Composable
-private fun Lane(
-    width: Int,
-    layout: ColumnLayoutState,
-    onLayout: (ColumnLayoutState) -> Unit,
+private fun LaneColumn(
     column: BoardColumn,
+    index: Int,
     cards: List<BoardCard>?,
     time: ColumnTime?,
+    density: BoardDensity,
     controller: OwnerMoveController?,
-    accepts: Boolean,
-    dimmed: Boolean,
+    held: BoardCard?,
+    move: OwnerMoveState,
     laneBounds: MutableMap<BoardColumn, Rect>,
     scope: CoroutineScope,
     openCardId: String?,
     focusReturnCardId: String?,
     onOpenCard: (String) -> Unit,
+    doneExpanded: Boolean,
+    onDoneExpanded: (Boolean) -> Unit,
+    modifier: Modifier,
 ) {
-    val waiting = isWaitingForOwner(column) && !cards.isNullOrEmpty()
     val count = cards?.size
+    val waiting = isWaitingForOwner(column) && !cards.isNullOrEmpty()
+    val accepts = held != null && column in move.targets
+    val dimmed = held != null && !accepts && held.column != column
     val timeLabel = time?.let(ColumnTimeLabel::of)
-    if (width == ColumnLayoutState.COLLAPSED_WIDTH && count == 0 && column !in layout.restored) {
-        CollapsedLane(column, laneBounds) { onLayout(layout.restore(column)) }
-        return
-    }
-    val chips = layout.density == BoardDensity.CHIPS
+    val chips = density == BoardDensity.CHIPS
+    val accent = Tokens.accent
+    val ground = Tokens.ground
+    val edge = Tokens.edge
+    val faint = Tokens.faint
     Column(
-        modifier = Modifier
-            .width(width.dp)
-            .fillMaxHeight()
-            .alpha(if (dimmed) 0.45f else 1f)
+        modifier = modifier
+            .heightIn(min = COLUMN_MIN_HEIGHT)
+            .alpha(if (dimmed) 0.4f else 1f)
             .onGloballyPositioned { laneBounds[column] = it.boundsInRoot() }
-            .background(if (accepts) Tokens.raise else Color.Transparent)
-            .drawBehind { drawLine(Tokens.edge, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1.dp.toPx()) }
+            .background(if (accepts) accent.copy(alpha = 0.09f) else if (waiting) accent.copy(alpha = 0.05f) else Color.Transparent)
+            .drawBehind {
+                if (index < 4) drawLine(edge, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1.dp.toPx())
+                if (waiting) drawRect(accent, size = Size(size.width, 2.dp.toPx()))
+                if (index > 0) drawFlowChevron(ground, edge, faint)
+            }
             .semantics { contentDescription = laneDescription(column, count ?: 0, waiting, timeLabel) },
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp).padding(start = 14.dp),
+            modifier = Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 14.dp),
         ) {
+            if (waiting) Box(Modifier.size(7.dp).background(Tokens.accent, CircleShape))
             BasicText(
                 column.displayName,
                 maxLines = 1,
@@ -503,27 +567,27 @@ private fun Lane(
                 modifier = Modifier.weight(1f),
                 style = TextStyle(fontFamily = sans, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (waiting) Tokens.sand else Tokens.muted),
             )
-            BasicText(
-                count?.toString() ?: "–",
-                style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.faint, fontFeatureSettings = "tnum"),
-            )
-            ResizeHandle(column, width, onLayout, layout)
+            CountPill(count?.toString() ?: "–")
         }
         if (!chips) {
-            timeLabel?.let { Meta(it, Tokens.faint, Modifier.padding(start = 14.dp, bottom = 6.dp)) }
+            Box(Modifier.height(15.dp).padding(start = 14.dp)) {
+                timeLabel?.let { Meta(it, Tokens.faint) }
+            }
+            Spacer(Modifier.height(6.dp))
         }
+        val gap = if (chips) 0.dp else 9.dp
+        val sidePad = if (chips) 0.dp else 12.dp
         Column(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(start = if (chips) 0.dp else 10.dp, end = if (chips) 0.dp else 10.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(if (chips) 0.dp else 10.dp),
+            Modifier.fillMaxWidth().padding(start = sidePad, end = sidePad, bottom = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(gap),
         ) {
+            val isDone = column == BoardColumn.DONE
+            val ordered = if (isDone) cards?.asReversed() else cards
+            val shown = if (isDone && !doneExpanded) ordered?.take(DONE_SHOWN) else ordered
             when {
-                cards == null -> Meta(Texts.LOADING_BOARD, Tokens.faint)
-                cards.isEmpty() -> Meta(Texts.EMPTY_COLUMN, Tokens.faint, Modifier.padding(start = 4.dp))
-                else -> cards.forEach {
+                cards == null -> Meta(Texts.LOADING_BOARD, Tokens.faint, Modifier.padding(start = if (chips) 14.dp else 2.dp))
+                cards.isEmpty() && !accepts -> EmptyBox(Texts.EMPTY_COLUMN)
+                else -> shown.orEmpty().forEach {
                     if (chips) {
                         Chip(it, it.id == openCardId, it.id == focusReturnCardId, onOpenCard)
                     } else {
@@ -531,48 +595,61 @@ private fun Lane(
                     }
                 }
             }
-        }
-    }
-}
-
-/** An empty column folded to a strip: count on top, name rotated below; click or Enter/Space restores it. */
-@Composable
-private fun CollapsedLane(column: BoardColumn, laneBounds: MutableMap<BoardColumn, Rect>, onRestore: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    Column(
-        modifier = Modifier
-            .width(ColumnLayoutState.COLLAPSED_WIDTH.dp)
-            .fillMaxHeight()
-            .onGloballyPositioned { laneBounds[column] = it.boundsInRoot() }
-            .drawBehind {
-                drawLine(Tokens.edge, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1.dp.toPx())
-                if (focused) drawRect(Tokens.accent, style = Stroke(2.dp.toPx()))
+            if (isDone && (ordered?.size ?: 0) > DONE_SHOWN) {
+                Row(
+                    modifier = Modifier
+                        .clickable(role = Role.Button) { onDoneExpanded(!doneExpanded) }
+                        .padding(horizontal = if (chips) 14.dp else 2.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconGlyph(AppIcon.ARROW_DOWN, Tokens.faint, size = 13.dp)
+                    BasicText(
+                        if (doneExpanded) Texts.SHOW_FEWER else Texts.showOlder((ordered?.size ?: 0) - DONE_SHOWN),
+                        style = TextStyle(fontFamily = sans, fontSize = 12.5.sp, color = Tokens.faint),
+                    )
+                }
             }
-            .onFocusChanged { focused = it.isFocused }
-            .clickable(role = Role.Button, onClick = onRestore)
-            .clearAndSetSemantics { contentDescription = Texts.restoreColumn(column) }
-            .padding(vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        BasicText("0", style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.faint, fontFeatureSettings = "tnum"))
-        BasicText(
-            column.displayName,
-            maxLines = 1,
-            modifier = Modifier.vertical(),
-            style = TextStyle(fontFamily = sans, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Tokens.faint),
-        )
+            if (accepts) EmptyBox(Texts.DROP_HERE, highlighted = true, modifier = Modifier.padding(horizontal = if (chips) 12.dp else 0.dp, vertical = if (chips) 8.dp else 0.dp))
+        }
     }
 }
 
-/** Rotates the text a quarter turn so a column name reads bottom to top inside the strip. */
-private fun Modifier.vertical(): Modifier =
-    layout { measurable, constraints ->
-        val placeable = measurable.measure(constraints.copy(maxWidth = Int.MAX_VALUE))
-        layout(placeable.height, placeable.width) {
-            placeable.placeWithLayer(-(placeable.width - placeable.height) / 2, (placeable.width - placeable.height) / 2) { rotationZ = -90f }
-        }
+/** The little arrow on the divider that says the flow goes on to this column. */
+private fun DrawScope.drawFlowChevron(fill: Color, border: Color, mark: Color) {
+    val radius = 8.dp.toPx()
+    val center = Offset(0f, 18.dp.toPx())
+    drawCircle(fill, radius, center)
+    drawCircle(border, radius, center, style = Stroke(1.dp.toPx()))
+    val path = Path().apply {
+        moveTo(center.x - 1.8.dp.toPx(), center.y - 3.2.dp.toPx())
+        lineTo(center.x + 1.8.dp.toPx(), center.y)
+        lineTo(center.x - 1.8.dp.toPx(), center.y + 3.2.dp.toPx())
     }
+    drawPath(path, mark, style = Stroke(1.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+}
+
+/** A dashed box: "vazia" in an empty column, "soltar aqui" in the column a held card can go to. */
+@Composable
+private fun EmptyBox(text: String, highlighted: Boolean = false, modifier: Modifier = Modifier) {
+    val color = if (highlighted) Tokens.sand else Tokens.faint
+    val line = if (highlighted) Tokens.accent else Tokens.edgeHi
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(if (highlighted) 42.dp else 50.dp)
+            .drawBehind {
+                drawRoundRect(
+                    line,
+                    cornerRadius = CornerRadius(8.dp.toPx()),
+                    style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))),
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        BasicText(text, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = color))
+    }
+}
 
 /** A chip is a list row: the state glyph and the title on one line, no box; the full face is the accessibility description. */
 @Composable
@@ -610,62 +687,13 @@ private fun Chip(card: BoardCard, open: Boolean, takesFocus: Boolean, onOpenCard
     }
 }
 
-/** The grip in the column header: drag, double click to reset, Left/Right to nudge by [ColumnLayoutState.KEY_STEP]. */
-@OptIn(ExperimentalComposeUiApi::class)
+/** The density switch: cards or chips, as icons with tooltips. */
 @Composable
-private fun ResizeHandle(column: BoardColumn, width: Int, onLayout: (ColumnLayoutState) -> Unit, layout: ColumnLayoutState) {
-    var focused by remember { mutableStateOf(false) }
-    var hovered by remember { mutableStateOf(false) }
-    val density = LocalDensity.current.density
-    val latestWidth by rememberUpdatedState(width)
-    val latestLayout by rememberUpdatedState(layout)
-    Box(
-        modifier = Modifier
-            .size(24.dp)
-            .border(if (focused) 2.dp else 0.dp, if (focused) Tokens.accent else Color.Transparent, RoundedCornerShape(6.dp))
-            .onPointerEvent(PointerEventType.Enter) { hovered = true }
-            .onPointerEvent(PointerEventType.Exit) { hovered = false }
-            .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .semantics { role = Role.Button; contentDescription = Texts.resizeHandle(column) }
-            .onKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
-                val step = when (event.key) {
-                    Key.DirectionLeft -> -ColumnLayoutState.KEY_STEP
-                    Key.DirectionRight -> ColumnLayoutState.KEY_STEP
-                    else -> return@onKeyEvent false
-                }
-                onLayout(latestLayout.resize(column, latestWidth + step))
-                true
-            }
-            .pointerInput(column) {
-                detectTapGestures(onDoubleTap = { onLayout(latestLayout.reset(column)) })
-            }
-            .pointerInput(column) {
-                var dragWidth = 0f
-                detectDragGestures(
-                    onDragStart = { dragWidth = latestWidth.toFloat() },
-                    onDrag = { change, amount ->
-                        change.consume()
-                        dragWidth += amount.x / density
-                        onLayout(latestLayout.resize(column, dragWidth.roundToInt()))
-                    },
-                )
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(Modifier.size(width = 2.dp, height = 14.dp).background(if (hovered || focused) Tokens.soft else Tokens.edgeHi, RoundedCornerShape(1.dp)))
-    }
-}
-
-/** Fit to window (a toggle) and the density switch, as icons with tooltips. */
-@Composable
-private fun LayoutControls(layout: ColumnLayoutState, onLayout: (ColumnLayoutState) -> Unit) {
-    IconButton(AppIcon.FIT, Texts.FIT_TO_WINDOW, selected = layout.fit) { onLayout(layout.withFit(!layout.fit)) }
+private fun LayoutControls(density: BoardDensity, onDensity: (BoardDensity) -> Unit) {
     IconSegmented(
         listOf(AppIcon.CARDS to Texts.DENSITY_CARDS, AppIcon.ROWS to Texts.DENSITY_CHIPS),
-        selected = if (layout.density == BoardDensity.CARDS) 0 else 1,
-    ) { onLayout(layout.withDensity(if (it == 0) BoardDensity.CARDS else BoardDensity.CHIPS)) }
+        selected = if (density == BoardDensity.CARDS) 0 else 1,
+    ) { onDensity(if (it == 0) BoardDensity.CARDS else BoardDensity.CHIPS) }
 }
 
 @Composable
@@ -763,6 +791,21 @@ private fun Card(
             ) {
                 BasicText(face.age.orEmpty(), style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.muted, fontFeatureSettings = "tnum"))
                 BasicText(cost, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.muted, fontFeatureSettings = "tnum"))
+            }
+        }
+        if (controller != null && waiting) {
+            val spec = card.column == BoardColumn.SPEC_REVIEW
+            val approveTo = if (spec) BoardColumn.READY_FOR_DEV else BoardColumn.READY_FOR_PROD
+            val changeTo = if (spec) BoardColumn.READY_FOR_REFINEMENT else BoardColumn.CODING
+            fun decide(to: BoardColumn) {
+                controller.hold(card.id)
+                controller.chooseTarget(to)
+                scope.launch { controller.submit() }
+            }
+            @OptIn(ExperimentalLayoutApi::class)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                AppButton(if (spec) Texts.APPROVE else Texts.RELEASE, AppIcon.CHECK, ButtonKind.ACCENT) { decide(approveTo) }
+                AppButton(Texts.REQUEST_CHANGE, AppIcon.UNDO) { decide(changeTo) }
             }
         }
     }

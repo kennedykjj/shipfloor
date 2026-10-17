@@ -136,6 +136,16 @@ object Texts {
 
     const val BOARD = "Esteira"
     const val NAV_FACTORY = "Fábrica"
+    const val LANE_REFINE = "Refinar"
+    const val LANE_REFINE_SUB = "do pedido à spec aprovada"
+    const val LANE_DELIVER = "Desenvolver e entregar"
+    const val LANE_DELIVER_SUB = "da implementação ao Done"
+    const val LANE_HAND_OFF = "segue na raia de baixo"
+    const val DROP_HERE = "soltar aqui"
+    const val SHOW_FEWER = "Mostrar menos"
+    const val RELEASE = "Liberar"
+
+    fun showOlder(count: Int): String = "Ver os $count mais antigos"
     const val NAV_SETTINGS = "Configurações"
     const val SEARCH_HINT = "Buscar card ou comando"
     const val SEARCH_SHORTCUT = "Ctrl K"
@@ -284,11 +294,8 @@ object Texts {
 
     const val OPEN_SETTINGS = "Configurações"
     const val RELOAD = "Recarregar"
-    const val FIT_TO_WINDOW = "Ajustar à janela"
     const val DENSITY_CARDS = "Cartões"
     const val DENSITY_CHIPS = "Fichas"
-    fun resizeHandle(column: BoardColumn): String = "Ajustar largura de ${column.displayName}"
-    fun restoreColumn(column: BoardColumn): String = "Restaurar ${column.displayName}, vazia"
     const val RELOADING = "Recarregando…"
     const val RELOAD_FAILED = "Não foi possível ler o quadro do daemon. Confira se o daemon está ativo e tente de novo."
     const val SETTINGS_TITLE = "Configurações"
