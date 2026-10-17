@@ -1,0 +1,128 @@
+<meta charset="utf-8">
+<title>Shipfloor Configurações</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Settings, simplified: plain rows, one hairline between sections, controls that are not in use are not shown. */
+:root{--font:"Geist",system-ui,sans-serif;--mono:"Geist Mono",ui-monospace,monospace;
+  --bg:#fafafa;--pn:#fff;--rs:#f4f4f4;--ln:#e6e6e6;--ln2:#cfcfcf;--fg:#171717;--fg2:#5c5c5c;--fg3:#6b6b6b;--acc:#f5a623;--acc-ink:#1a1100;
+  --pg:#e9eaec;--pg-fg:#15161a;--pg-mut:#5a5d68;--pg-card:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#131417;--pn:#1b1d21;--rs:#24272c;--ln:#2e3238;--ln2:#434850;--fg:#ececef;--fg2:#a3a7ae;--fg3:#8c9098;--pg:#0d0e10;--pg-fg:#eceef3;--pg-mut:#9aa0b0;--pg-card:#1b1d21}}
+:root[data-theme="dark"]{--bg:#131417;--pn:#1b1d21;--rs:#24272c;--ln:#2e3238;--ln2:#434850;--fg:#ececef;--fg2:#a3a7ae;--fg3:#8c9098;--pg:#0d0e10;--pg-fg:#eceef3;--pg-mut:#9aa0b0;--pg-card:#1b1d21}
+*{box-sizing:border-box}
+body{margin:0;background:var(--pg);color:var(--pg-fg);font:14px/1.45 system-ui,sans-serif;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button,input{font:inherit;color:inherit}button{border:0;background:none;cursor:pointer;padding:0}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.top{max-width:1500px;margin:0 auto 14px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+.top h1{margin:0;font-size:20px;font-weight:700}.top p{margin:4px 0 0;color:var(--pg-mut);max-width:70ch}
+.seg{display:inline-flex;gap:3px;background:var(--pg-card);padding:3px;border-radius:10px}
+.seg button{padding:7px 12px;border-radius:8px;font-weight:600;color:var(--pg-mut)}
+.seg button[aria-pressed="true"]{background:var(--pg-fg);color:var(--pg)}
+.scroller{max-width:1500px;margin:0 auto;overflow-x:auto;border-radius:14px}
+.win{min-width:1080px;height:700px;background:var(--bg);color:var(--fg);font:400 14px/1.4 var(--font);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;position:relative}
+svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.head{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--ln);flex:none}
+.head h2{margin:0;font-size:15px;font-weight:600}
+.ib{width:28px;height:28px;border:1px solid var(--ln);border-radius:6px;display:grid;place-items:center;color:var(--fg2)}.ib:hover{background:var(--rs);color:var(--fg)}
+.body{flex:1;min-height:0;overflow:auto;padding:8px 20px 90px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 36px;max-width:1300px;margin:0 auto;align-items:start}
+.colm{min-width:0}
+.segc{display:inline-flex;border:1px solid var(--ln);border-radius:7px;padding:2px;gap:2px}.segc button{padding:3px 10px;border-radius:5px;font-size:12.5px;font-weight:500;color:var(--fg3)}.segc button[aria-pressed="true"]{background:var(--rs);color:var(--fg)}
+.proj{display:flex;align-items:center;gap:12px;min-height:56px;border-bottom:1px solid var(--ln)}.proj:last-child{border-bottom:0}.proj .l{flex:1;min-width:0}.proj b{display:block;font-weight:500}.proj small{display:block;color:var(--fg3);font:400 12px var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:#3ecf8e;display:inline-block;margin-right:6px}
+.lnk{color:var(--fg2);font-size:13px;font-weight:500;text-decoration:underline;text-underline-offset:3px}
+h3{margin:22px 0 2px;font-size:12px;font-weight:600;color:var(--fg3);letter-spacing:.01em}
+.row{display:flex;align-items:center;gap:16px;min-height:52px;border-bottom:1px solid var(--ln)}
+.row:last-child{border-bottom:0}
+.row .l{flex:1;min-width:0}.row .l b{display:block;font-weight:500;font-size:14px}.row .l small{display:block;color:var(--fg3);font-size:12.5px;margin-top:1px}
+.sw{width:34px;height:20px;border-radius:10px;background:var(--ln2);padding:2px;display:flex;align-items:center;transition:background .12s}
+.sw i{width:16px;height:16px;border-radius:50%;background:var(--bg);transition:transform .12s}
+.sw[aria-checked="true"]{background:var(--fg)}.sw[aria-checked="true"] i{transform:translateX(14px)}
+.step{display:inline-flex;align-items:center;gap:8px}.step span{min-width:22px;text-align:center;font:500 14px var(--mono)}
+.field{display:inline-flex;align-items:center;gap:6px;height:30px;border:1px solid var(--ln);border-radius:7px;padding:0 9px;background:var(--pn);color:var(--fg3);font-size:13px}
+.field input{width:70px;border:0;background:none;outline:0;color:var(--fg);text-align:right;font:500 13px var(--mono)}
+.field input::placeholder{color:var(--fg3);font-family:var(--font);font-weight:400}
+.time{width:76px}.time input{width:48px;text-align:center}
+.days{display:flex;gap:4px}.days button{height:28px;min-width:38px;border:1px solid var(--ln);border-radius:6px;font-size:12.5px;font-weight:500;color:var(--fg3)}
+.days button[aria-pressed="true"]{background:var(--rs);border-color:var(--ln2);color:var(--fg)}
+.sub{padding:0 0 12px;display:grid;gap:10px}
+.sub .r2{display:flex;align-items:center;gap:10px;color:var(--fg3);font-size:13px}
+.bar{position:absolute;left:0;right:0;bottom:0;background:var(--pn);border-top:1px solid var(--ln);display:flex;align-items:center;gap:12px;padding:12px 20px;transform:translateY(100%);transition:transform .18s cubic-bezier(.16,1,.3,1)}
+.bar.on{transform:none}.bar .t{flex:1;color:var(--fg2);font-size:13.5px}
+.btn{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:8px;font-size:13px;font-weight:600;border:1px solid var(--ln2)}
+.btn:hover{background:var(--rs)}.btn.p{background:var(--fg);color:var(--bg);border-color:var(--fg)}.btn.p:hover{opacity:.9}
+</style>
+
+<div class="top">
+  <div><h1>Shipfloor, configurações em três colunas</h1><p>A tela inteira em uso: três colunas de linhas simples, com opções novas (tentativas, limite por semana, aparência, aplicativo, projetos, dados). As que já existem no daemon: sessões, horário, custo e avisos. As demais são sugestões. A barra de salvar só aparece quando algo muda.</p></div>
+  <div class="seg" role="group" aria-label="Tema"><button data-t="system" aria-pressed="true">Sistema</button><button data-t="light" aria-pressed="false">Claro</button><button data-t="dark" aria-pressed="false">Escuro</button></div>
+</div>
+<div class="scroller"><div class="win">
+  <div class="head"><button class="ib" aria-label="Voltar"><svg class="i" viewBox="0 0 16 16"><path d="M13 8H3M7.5 3.5 3 8l4.5 4.5"/></svg></button><h2>Configurações</h2></div>
+  <div class="body"><div class="grid3" id="col"></div></div>
+  <div class="bar" id="bar"><span class="t" id="bt"></span><button class="btn" id="discard"><svg class="i" viewBox="0 0 16 16"><path d="M6 3.2 2.8 6.4 6 9.6M2.8 6.4H9q4.2 0 4.2 4v2.2"/></svg>Descartar</button><button class="btn p" id="save"><svg class="i" viewBox="0 0 16 16"><path d="M3.2 8.4 6.6 11.8 12.8 4.6"/></svg>Salvar</button></div>
+</div></div>
+
+<script>
+const base={pool:2,hours:false,start:'09:00',end:'18:00',days:[1,1,1,1,1,0,0],retries:2,card:'30',day:'300',week:'',nDecision:true,nFail:true,nStop:true,sound:false,qs:'',qe:'',theme:0,density:0,cap:4,showCost:true,tray:true,autostart:false,keep:30,pA:true,pB:true};
+let S={...base,days:[...base.days]};
+const DAYS=['Seg','Ter','Ter','Qui','Sex','Sáb','Dom'];DAYS[2]='Qua';
+const sw=(k)=>`<button class="sw" role="switch" aria-checked="${S[k]}" data-sw="${k}"><i></i></button>`;
+function render(){
+ const f=(k,ph,pre,suf)=>`<label class="field">${pre?pre+' ':''}<input data-f="${k}" value="${S[k]}" placeholder="${ph}" inputmode="decimal">${suf?' '+suf:''}</label>`;
+ const t=(k)=>`<label class="field time"><input data-f="${k}" value="${S[k]}" placeholder="--:--"></label>`;
+ const seg=(k,opts)=>`<div class="segc" role="group">${opts.map((o,i)=>`<button data-sg="${k}:${i}" aria-pressed="${S[k]===i}">${o}</button>`).join('')}</div>`;
+ const step=(k,min,max)=>`<div class="step"><button class="ib" data-st="${k}:-1:${min}:${max}" aria-label="Diminuir"><svg class="i" viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button><span>${S[k]}</span><button class="ib" data-st="${k}:1:${min}:${max}" aria-label="Aumentar"><svg class="i" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></button></div>`;
+ const row=(t,sm,ctl)=>`<div class="row"><div class="l"><b>${t}</b>${sm?`<small>${sm}</small>`:''}</div>${ctl}</div>`;
+ document.getElementById('col').innerHTML=`
+ <div class="colm">
+  <h3>Fábrica</h3>
+  ${row('Sessões simultâneas','Quantos agentes trabalham ao mesmo tempo',step('pool',1,12))}
+  ${row('Tentativas por card','Quantas vezes um gate falho volta ao agente',step('retries',0,5))}
+  ${row('Trabalhar só em horário',S.hours?'':'Hoje a fábrica trabalha o tempo todo',sw('hours'))}
+  ${S.hours?`<div class="sub"><div class="r2">Das ${t('start')} às ${t('end')}</div><div class="days">${DAYS.map((d,i)=>`<button data-d="${i}" aria-pressed="${!!S.days[i]}">${d}</button>`).join('')}</div></div>`:''}
+  <h3>Custo</h3>
+  ${row('Limite por card','',f('card','sem limite','US$','est.'))}
+  ${row('Limite por dia','',f('day','sem limite','US$','est.'))}
+  ${row('Limite por semana','',f('week','sem limite','US$','est.'))}
+  ${row('Mostrar custo nos cards','Sempre como estimativa',sw('showCost'))}
+ </div>
+ <div class="colm">
+  <h3>Avisos</h3>
+  ${row('Uma decisão espera por você','',sw('nDecision'))}
+  ${row('Um run falhou','',sw('nFail'))}
+  ${row('A fábrica parou','',sw('nStop'))}
+  ${row('Som ao pedir decisão','',sw('sound'))}
+  ${row('Horário silencioso','Sem avisos entre o início e o fim',`<div class="r2" style="display:flex;gap:8px;align-items:center">${t('qs')}<span style="color:var(--fg3)">até</span>${t('qe')}</div>`)}
+  <h3>Aparência</h3>
+  ${row('Tema','',seg('theme',['Sistema','Claro','Escuro']))}
+  ${row('Cards no quadro','',seg('density',['Cartões','Fichas']))}
+  ${row('Cards visíveis por coluna','Os demais ficam no "+N"',step('cap',2,12))}
+ </div>
+ <div class="colm">
+  <h3>Aplicativo</h3>
+  ${row('Fechar para a bandeja','O X esconde a janela e o app continua rodando',sw('tray'))}
+  ${row('Abrir na bandeja ao entrar','Sem janela até você chamar',sw('autostart'))}
+  ${row('Atalho de busca','Abre a paleta de comandos','<span class="field" style="font:500 12px var(--mono)">Ctrl K</span>')}
+  <h3>Projetos</h3>
+  <div class="proj"><div class="l"><b>shipfloor</b><small>~/git/shipfloor</small></div><span class="pillx" style="font-size:12.5px;color:var(--fg3)">Entrega no PR</span>${sw('pA')}</div>
+  <div class="proj"><div class="l"><b>pickio</b><small>~/git/pickio</small></div><span style="font-size:12.5px;color:var(--fg3)">Autônomo</span>${sw('pB')}</div>
+  <h3>Dados e serviço</h3>
+  ${row('Guardar transcrições por','Dias; depois são apagadas',`<div class="step"><button class="ib" data-st="keep:-5:5:90" aria-label="Diminuir"><svg class="i" viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button><span>${S.keep}</span><button class="ib" data-st="keep:5:5:90" aria-label="Aumentar"><svg class="i" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></button></div>`)}
+  ${row('<i class="dot"></i>Serviço ativo','shipfloor 1.0.0 · desde 13:52','<a class="lnk" href="#" onclick="return false">Abrir logs</a>')}
+ </div>`;
+ wire();upd()}
+function changes(){return Object.keys(base).filter(k=>JSON.stringify(S[k])!==JSON.stringify(base[k])).length}
+function upd(){const n=changes();document.getElementById('bar').classList.toggle('on',n>0);document.getElementById('bt').textContent=n===1?'1 alteração':n+' alterações'}
+function wire(){
+ document.querySelectorAll('[data-sw]').forEach(b=>b.onclick=()=>{S[b.dataset.sw]=!S[b.dataset.sw];render()});
+ document.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{const[k,d,mn,mx]=b.dataset.st.split(':');S[k]=Math.min(+mx,Math.max(+mn,S[k]+ +d));render()});
+ document.querySelectorAll('[data-sg]').forEach(b=>b.onclick=()=>{const[k,i]=b.dataset.sg.split(':');S[k]=+i;render()});
+ document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{S.days[+b.dataset.d]^=1;render()});
+ document.querySelectorAll('[data-f]').forEach(i=>i.oninput=()=>{S[i.dataset.f]=i.value;upd()})}
+document.getElementById('discard').onclick=()=>{S={...base,days:[...base.days]};render()};
+document.getElementById('save').onclick=()=>{Object.assign(base,S,{days:[...S.days]});upd()};
+document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{const t=b.dataset.t;t==='system'?document.documentElement.removeAttribute('data-theme'):document.documentElement.setAttribute('data-theme',t);document.querySelectorAll('[data-t]').forEach(x=>x.setAttribute('aria-pressed',x===b))});
+render();
+</script>
