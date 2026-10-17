@@ -24,7 +24,11 @@ private const val WATCHER_PATH = "/StatusNotifierWatcher"
 private const val MENU_ROOT = 0
 private const val MENU_OPEN = 1
 private const val MENU_WAITING = 2
-private const val MENU_QUIT = 3
+private const val MENU_SEPARATOR_TOP = 3
+private const val MENU_FEED = 4
+private const val MENU_SETTINGS = 5
+private const val MENU_SEPARATOR_BOTTOM = 6
+private const val MENU_QUIT = 7
 
 @DBusInterfaceName("org.kde.StatusNotifierWatcher")
 interface StatusNotifierWatcher : DBusInterface {
@@ -104,9 +108,10 @@ class MenuProperties(
     @field:Position(1) val properties: Map<String, Variant<*>>,
 ) : Struct()
 
-class MenuLayout(
-    @field:Position(0) val revision: UInt32,
-    @field:Position(1) val layout: MenuNode,
+/** dbus-java only exports a multiple return (`(u(ia{sv}av))` here) from a parameterized [Tuple]. */
+class MenuLayout<A, B>(
+    @field:Position(0) val revision: A,
+    @field:Position(1) val layout: B,
 ) : Tuple()
 
 @DBusInterfaceName("com.canonical.dbusmenu")
@@ -124,7 +129,7 @@ interface DbusMenu : DBusInterface {
     @DBusBoundProperty(name = "IconThemePath")
     fun getIconThemePath(): List<String>
 
-    fun GetLayout(parentId: Int, recursionDepth: Int, propertyNames: List<String>): MenuLayout
+    fun GetLayout(parentId: Int, recursionDepth: Int, propertyNames: List<String>): MenuLayout<UInt32, MenuNode>
 
     fun GetGroupProperties(ids: List<Int>, propertyNames: List<String>): List<MenuProperties>
 
@@ -139,12 +144,14 @@ interface DbusMenu : DBusInterface {
 
 /**
  * StatusNotifierItem plus `com.canonical.dbusmenu` on the session bus: the tray icon, tooltip and menu
- * (`Abrir Shipfloor`, `N esperando você`, `Sair`). A thin adapter; the decisions are made by [OwnerNoticeShell].
+ * (`Abrir Shipfloor`, `N esperando você`, `Feed do dia`, `Configurações`, `Sair`). A thin adapter; the decisions are made by [OwnerNoticeShell].
  */
 class DbusTray(
     private val connection: DBusConnection,
     private val language: NoticeLanguage,
     private val onQuit: () -> Unit,
+    private val onFeed: () -> Unit = {},
+    private val onSettings: () -> Unit = {},
 ) : TrayPort {
     @Volatile private var waiting = 0
 
@@ -198,8 +205,8 @@ class DbusTray(
 
         override fun getIconThemePath() = emptyList<String>()
 
-        override fun GetLayout(parentId: Int, recursionDepth: Int, propertyNames: List<String>): MenuLayout {
-            val children = listOf(MENU_OPEN, MENU_WAITING, MENU_QUIT).map { Variant(node(it), "(ia{sv}av)") }
+        override fun GetLayout(parentId: Int, recursionDepth: Int, propertyNames: List<String>): MenuLayout<UInt32, MenuNode> {
+            val children = MENU_ORDER.map { Variant(node(it), "(ia{sv}av)") }
             val root = MenuNode(MENU_ROOT, mapOf("children-display" to Variant("submenu")), children)
             return MenuLayout(UInt32(revision), root)
         }
@@ -212,7 +219,9 @@ class DbusTray(
         override fun Event(id: Int, eventId: String, data: Variant<*>, timestamp: UInt32) {
             if (eventId != "clicked") return
             when (id) {
-                MENU_OPEN -> activated()
+                MENU_OPEN, MENU_WAITING -> activated()
+                MENU_FEED -> onFeed()
+                MENU_SETTINGS -> onSettings()
                 MENU_QUIT -> onQuit()
             }
         }
@@ -259,15 +268,21 @@ class DbusTray(
 
     private fun node(id: Int) = MenuNode(id, properties(id), emptyList())
 
-    private fun properties(id: Int): Map<String, Variant<*>> =
-        when (id) {
-            MENU_OPEN -> mapOf("label" to Variant(if (language == NoticeLanguage.PT_BR) "Abrir Shipfloor" else "Open Shipfloor"))
+    private fun properties(id: Int): Map<String, Variant<*>> {
+        val pt = language == NoticeLanguage.PT_BR
+        return when (id) {
+            MENU_OPEN -> mapOf("label" to Variant(if (pt) "Abrir Shipfloor" else "Open Shipfloor"))
             MENU_WAITING -> mapOf(
                 "label" to Variant(NoticeText.tooltip(waiting, language).substringAfter(" · ")),
-                "enabled" to Variant(false),
                 "visible" to Variant(waiting > 0),
             )
-            MENU_QUIT -> mapOf("label" to Variant(if (language == NoticeLanguage.PT_BR) "Sair" else "Quit"))
+            MENU_FEED -> mapOf("label" to Variant(if (pt) "Feed do dia" else "Day feed"))
+            MENU_SETTINGS -> mapOf("label" to Variant(if (pt) "Configurações" else "Settings"))
+            MENU_SEPARATOR_TOP, MENU_SEPARATOR_BOTTOM -> mapOf("type" to Variant("separator"))
+            MENU_QUIT -> mapOf("label" to Variant(if (pt) "Sair" else "Quit"))
             else -> mapOf("children-display" to Variant("submenu"))
         }
+    }
 }
+
+private val MENU_ORDER = listOf(MENU_OPEN, MENU_WAITING, MENU_SEPARATOR_TOP, MENU_FEED, MENU_SETTINGS, MENU_SEPARATOR_BOTTOM, MENU_QUIT)

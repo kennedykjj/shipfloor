@@ -43,11 +43,16 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import java.awt.Dimension
 import java.io.IOException
+import java.lang.management.ManagementFactory
 import java.nio.file.Path
 import java.time.Clock
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,6 +77,10 @@ private sealed interface WindowRequest {
     /** Brings the window to the front on [cardId], or on the board when it is null. */
     data class Open(val cardId: String?) : WindowRequest
 
+    data object ShowFeed : WindowRequest
+
+    data object ShowSettings : WindowRequest
+
     data object Quit : WindowRequest
 }
 
@@ -91,6 +100,9 @@ private object NoNotifications : NotificationPort {
     override fun onActivated(listener: (notificationId: Int) -> Unit) = Unit
 }
 
+/** Milliseconds since the JVM started; the startup log uses it to say where the time goes. */
+private fun sinceJvmStart(): Long = System.currentTimeMillis() - ManagementFactory.getRuntimeMXBean().startTime
+
 private fun logEvent(event: String, fields: Map<String, String>) {
     System.err.println((listOf("event=$event") + fields.map { "${it.key}=${it.value}" }).joinToString(" "))
 }
@@ -104,7 +116,13 @@ private fun openNoticePorts(requests: MutableSharedFlow<WindowRequest>): NoticeP
         return NoticePorts(NoTray, NoNotifications)
     }
     val tray = try {
-        DbusTray(connection, NoticeLanguage.PT_BR) { requests.tryEmit(WindowRequest.Quit) }
+        DbusTray(
+            connection,
+            NoticeLanguage.PT_BR,
+            onQuit = { requests.tryEmit(WindowRequest.Quit) },
+            onFeed = { requests.tryEmit(WindowRequest.ShowFeed) },
+            onSettings = { requests.tryEmit(WindowRequest.ShowSettings) },
+        )
     } catch (e: Exception) {
         logEvent("owner_notice_unavailable", mapOf("port" to "tray", "reason" to e.javaClass.simpleName))
         NoTray
@@ -160,6 +178,7 @@ private fun OpenCard(
 private const val TOKEN_RELATIVE_PATH = "shipfloor/owner.token"
 
 fun main() {
+    logEvent("app_startup", mapOf("phase" to "main", "ms" to sinceJvmStart().toString()))
     val runtimeDir = System.getenv("XDG_RUNTIME_DIR")?.takeIf { it.isNotBlank() }
     val monitor = runtimeDir?.let {
         ConnectionMonitor(SocketDaemonProbe(Path.of(it, SOCKET_RELATIVE_PATH)), SystemctlDaemonStarter(), Clock.systemUTC())
@@ -170,6 +189,7 @@ fun main() {
 
     val requests =MutableSharedFlow<WindowRequest>(extraBufferCapacity = REQUEST_BUFFER)
     val ports = openNoticePorts(requests)
+    logEvent("app_startup", mapOf("phase" to "ports", "ms" to sinceJvmStart().toString()))
     val shell = OwnerNoticeShell(
         ports.tray,
         ports.notifications,
@@ -210,6 +230,17 @@ fun main() {
 
     val noBoard: StateFlow<BoardView?> = MutableStateFlow(null)
     val noPulse: StateFlow<PulseView> = MutableStateFlow(PulseView.loading())
+
+    // The readings start now, while the window and the graphics are still being created, so the board is ready
+    // when the first frame is.
+    val background = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, failure ->
+            logEvent("background_failed", mapOf("reason" to failure.javaClass.simpleName))
+        },
+    )
+    monitor?.let { background.launch { it.run() } }
+    board?.let { background.launch { it.run() } }
+    pulse?.let { background.launch { it.run() } }
 
     application {
         var showSettings by remember { mutableStateOf(false) }
@@ -271,9 +302,7 @@ fun main() {
             }
         }
 
-        LaunchedEffect(Unit) { monitor?.run() }
-        LaunchedEffect(Unit) { board?.run() }
-        LaunchedEffect(Unit) { pulse?.run() }
+        LaunchedEffect(state) { logEvent("app_startup", mapOf("phase" to "connection_${state.javaClass.simpleName}", "ms" to sinceJvmStart().toString())) }
         // Every board event moves the cursor; the strip reads again instead of waiting for its 5 s tick.
         LaunchedEffect(view?.board?.lastSeq) { pulse?.refresh() }
         LaunchedEffect(feed, connected) { if (feed != null && connected) feed.run() }
@@ -291,6 +320,8 @@ fun main() {
             onPreviewKeyEvent = ::onPaletteKey,
         ) {
             window.minimumSize = Dimension(360, 240)
+            LaunchedEffect(Unit) { logEvent("app_startup", mapOf("phase" to "window", "ms" to sinceJvmStart().toString())) }
+            LaunchedEffect(view != null) { if (view != null) logEvent("app_startup", mapOf("phase" to "board", "ms" to sinceJvmStart().toString())) }
             LaunchedEffect(Unit) {
                 requests.collect { request ->
                     when (request) {
@@ -298,6 +329,17 @@ fun main() {
                             window.isMinimized = false
                             window.toFront()
                             request.cardId?.let { panel = panel.open(it) }
+                        }
+                        WindowRequest.ShowFeed -> {
+                            window.isMinimized = false
+                            window.toFront()
+                            showSettings = false
+                            showFeed = true
+                        }
+                        WindowRequest.ShowSettings -> {
+                            window.isMinimized = false
+                            window.toFront()
+                            showSettings = settingsClient != null
                         }
                         WindowRequest.Quit -> exitApplication()
                     }
@@ -376,6 +418,7 @@ fun main() {
             }
         }
     }
+    background.cancel()
 }
 
 /** The app bar above the active screen. */

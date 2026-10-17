@@ -126,21 +126,27 @@ class BoardMonitor(
         }
     }
 
-    /** Reads the snapshot and applies it, then the events that waited. False when the daemon could not be read. */
+    /**
+     * Reads the snapshot and shows it, then the events that waited, and only then reads the times per column and shows
+     * them too: the board does not wait for a statistic. False when the daemon could not be read.
+     */
     private suspend fun loadSnapshot(): Boolean {
         val cards = try {
             runInterruptible(io) { source.snapshot() }
         } catch (e: IOException) {
             return false
         }
-        val read = runInterruptible(io) { readColumnTimes() }
         synchronized(lock) {
             board = board.applySnapshot(cards)
-            columnTimes = read
             hasSnapshot = true
         }
         snapshotObserver(cards)
         drainWaiting()
+        val read = runInterruptible(io) { readColumnTimes() }
+        synchronized(lock) {
+            columnTimes = read
+            publish()
+        }
         return true
     }
 

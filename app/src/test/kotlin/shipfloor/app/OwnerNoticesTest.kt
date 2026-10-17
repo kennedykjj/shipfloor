@@ -5,6 +5,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
 import org.assertj.core.api.Assertions.assertThat
+import org.freedesktop.dbus.Marshalling
 import org.junit.jupiter.api.Test
 import shipfloor.core.Column
 import shipfloor.core.EventType
@@ -85,6 +86,15 @@ private class FakeNotifications(var failure: RuntimeException? = null) : Notific
 }
 
 class OwnerNoticesTest {
+    @Test
+    fun `the tray menu layout is exported with the dbusmenu signature`() {
+        val getLayout = DbusMenu::class.java.getMethod("GetLayout", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, List::class.java)
+
+        val signature = Marshalling.getDBusType(getLayout.genericReturnType).joinToString("")
+
+        assertThat(signature).isEqualTo("u(ia{sv}av)")
+    }
+
     private val clock = NoticeClock(OwnerNoticeFixtures.noon)
     private val tray = FakeTray()
     private val notifications = FakeNotifications()
