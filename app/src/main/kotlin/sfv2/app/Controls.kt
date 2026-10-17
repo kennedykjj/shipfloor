@@ -49,7 +49,7 @@ private val CONTROL_SHAPE = RoundedCornerShape(6.dp)
 private val ICON_SIZE = 16.dp
 
 /** The icons of the controls, drawn as strokes so they follow the theme. */
-enum class AppIcon { REFRESH, EQUALIZE, SUN, MOON, MONITOR }
+enum class AppIcon { REFRESH, SUN, MOON, MONITOR }
 
 @Composable
 fun IconGlyph(icon: AppIcon, color: Color, modifier: Modifier = Modifier) {
@@ -68,12 +68,6 @@ private fun DrawScope.drawIcon(icon: AppIcon, color: Color) {
                 lineTo(12.2f * unit, 5.6f * unit)
             }
             drawPath(head, color, style = line)
-        }
-        AppIcon.EQUALIZE -> {
-            val bar = 3f * unit
-            listOf(2f, 6.5f, 11f).forEach { x ->
-                drawRoundRect(color, Offset(x * unit, 3f * unit), Size(bar, 10f * unit), CornerRadius(0.8f * unit), style = line)
-            }
         }
         AppIcon.SUN -> {
             drawCircle(color, radius = 3f * unit, center = center, style = line)
@@ -129,30 +123,6 @@ fun IconButton(icon: AppIcon, description: String, enabled: Boolean = true, onCl
         contentAlignment = Alignment.Center,
     ) {
         IconGlyph(icon, if (hovered) Tokens.text else Tokens.soft)
-    }
-}
-
-/** A 28 dp button with an optional icon and a label. */
-@Composable
-fun ActionButton(label: String, icon: AppIcon? = null, enabled: Boolean = true, onClick: () -> Unit) {
-    val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
-    var focused by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier
-            .height(CONTROL_HEIGHT)
-            .alpha(if (enabled) 1f else 0.5f)
-            .background(if (hovered && enabled) Tokens.raise else Color.Transparent, CONTROL_SHAPE)
-            .border(if (focused) 2.dp else 1.dp, if (focused) Tokens.accent else Tokens.edge, CONTROL_SHAPE)
-            .hoverable(source)
-            .onFocusChanged { focused = it.isFocused }
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
-        if (icon != null) IconGlyph(icon, Tokens.soft)
-        BasicText(label, style = TextStyle(fontFamily = sans, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Tokens.text))
     }
 }
 

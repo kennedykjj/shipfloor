@@ -1072,28 +1072,6 @@ class BoardStateTest {
     }
 
     @Test
-    fun `AC-3 equalize restores every width and keeps fit and density`() {
-        val state = ColumnLayoutState().withFit(false).resize(Column.CODING, 300).resize(Column.INBOX, 260)
-
-        val after = state.equalize()
-
-        assertThat(Column.entries.map { after.widthOf(it) }).allMatch { it == 220 }
-        assertThat(after.fit).isFalse()
-        assertThat(after.density).isEqualTo(BoardDensity.CARDS)
-    }
-
-    @Test
-    fun `AC-3 equalize in Chips goes back to the chip default and stays in Chips`() {
-        val state = ColumnLayoutState().withDensity(BoardDensity.CHIPS).resize(Column.CODING, 300)
-
-        val after = state.equalize()
-
-        assertThat(Column.entries.map { after.widthOf(it) }).allMatch { it == 96 }
-        assertThat(after.density).isEqualTo(BoardDensity.CHIPS)
-        assertThat(after.fit).isTrue()
-    }
-
-    @Test
     fun `AC-4 a wide window splits the spare room in proportion to the widths and fills it exactly`() {
         val state = ColumnLayoutState().resize(Column.CODING, 440)
 

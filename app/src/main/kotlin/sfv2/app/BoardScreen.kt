@@ -673,11 +673,10 @@ private fun ResizeHandle(column: BoardColumn, width: Int, onLayout: (ColumnLayou
     }
 }
 
-/** Fit to window, Equalize and the density switch. */
+/** Fit to window and the density switch; a column goes back to its default width with a double click on its grip. */
 @Composable
 private fun LayoutControls(layout: ColumnLayoutState, onLayout: (ColumnLayoutState) -> Unit) {
     LabeledSwitch(Texts.FIT_TO_WINDOW, layout.fit) { onLayout(layout.withFit(it)) }
-    ActionButton(Texts.EQUALIZE, AppIcon.EQUALIZE) { onLayout(layout.equalize()) }
     SegmentedControl(
         listOf(Texts.DENSITY_CARDS, Texts.DENSITY_CHIPS),
         selected = if (layout.density == BoardDensity.CARDS) 0 else 1,

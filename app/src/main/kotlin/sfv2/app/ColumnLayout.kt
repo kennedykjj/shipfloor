@@ -22,8 +22,6 @@ data class ColumnLayoutState(
 
     fun reset(column: Column): ColumnLayoutState = withWidths(density, widths[density].orEmpty() - column)
 
-    fun equalize(): ColumnLayoutState = copy(widths = widths - density)
-
     fun withFit(fit: Boolean): ColumnLayoutState = copy(fit = fit)
 
     fun withDensity(density: BoardDensity): ColumnLayoutState = copy(density = density)
