@@ -155,11 +155,7 @@ fun BoardScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     BasicText(Texts.RELOAD_FAILED, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.warn))
-                    BasicText(
-                        Texts.DISMISS,
-                        modifier = Modifier.clickable { reloadFailed = false },
-                        style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.soft),
-                    )
+                    IconButton(AppIcon.CLOSE, Texts.DISMISS) { reloadFailed = false }
                 }
             }
             move.status?.let { StatusLine(it) }
@@ -366,11 +362,7 @@ private fun NoticeLine(notice: MoveNotice, onDismiss: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         BasicText(notice.text, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = color))
-        BasicText(
-            Texts.DISMISS,
-            modifier = Modifier.clickable(onClick = onDismiss),
-            style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.soft),
-        )
+        IconButton(AppIcon.CLOSE, Texts.DISMISS, onClick = onDismiss)
     }
 }
 
@@ -457,20 +449,9 @@ private fun NoteBox(onSend: (String) -> Unit, onCancel: () -> Unit) {
                     true
                 },
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            BasicText(
-                Texts.SEND_BACK,
-                modifier = Modifier
-                    .alpha(if (blank) 0.45f else 1f)
-                    .semantics { if (blank) contentDescription = Texts.SEND_BACK + " (desabilitado)" }
-                    .clickable(enabled = !blank) { onSend(text) },
-                style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.text),
-            )
-            BasicText(
-                Texts.CANCEL,
-                modifier = Modifier.clickable(onClick = onCancel),
-                style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.soft),
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AppButton(Texts.SEND_BACK, AppIcon.SEND, ButtonKind.PRIMARY, enabled = !blank) { onSend(text) }
+            AppButton(Texts.CANCEL, AppIcon.CLOSE, onClick = onCancel)
         }
     }
 }
@@ -677,12 +658,12 @@ private fun ResizeHandle(column: BoardColumn, width: Int, onLayout: (ColumnLayou
     }
 }
 
-/** Fit to window and the density switch; a column goes back to its default width with a double click on its grip. */
+/** Fit to window (a toggle) and the density switch, as icons with tooltips. */
 @Composable
 private fun LayoutControls(layout: ColumnLayoutState, onLayout: (ColumnLayoutState) -> Unit) {
-    LabeledSwitch(Texts.FIT_TO_WINDOW, layout.fit) { onLayout(layout.withFit(it)) }
-    SegmentedControl(
-        listOf(Texts.DENSITY_CARDS, Texts.DENSITY_CHIPS),
+    IconButton(AppIcon.FIT, Texts.FIT_TO_WINDOW, selected = layout.fit) { onLayout(layout.withFit(!layout.fit)) }
+    IconSegmented(
+        listOf(AppIcon.CARDS to Texts.DENSITY_CARDS, AppIcon.ROWS to Texts.DENSITY_CHIPS),
         selected = if (layout.density == BoardDensity.CARDS) 0 else 1,
     ) { onLayout(layout.withDensity(if (it == 0) BoardDensity.CARDS else BoardDensity.CHIPS)) }
 }

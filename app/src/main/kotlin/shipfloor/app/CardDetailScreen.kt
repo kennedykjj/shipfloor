@@ -279,20 +279,31 @@ private fun PanelTabs(selected: PanelTab, onSelect: (PanelTab) -> Unit) {
                 Modifier.width(IntrinsicSize.Max).selectable(selected = active, role = Role.Tab) { onSelect(tab) },
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                BasicText(
-                    tabLabel(tab),
-                    style = TextStyle(
-                        fontFamily = sans,
-                        fontSize = 14.sp,
-                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (active) Tokens.text else Tokens.muted,
-                    ),
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    IconGlyph(tabIcon(tab), if (active) Tokens.text else Tokens.muted, size = 14.dp)
+                    BasicText(
+                        tabLabel(tab),
+                        style = TextStyle(
+                            fontFamily = sans,
+                            fontSize = 14.sp,
+                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (active) Tokens.text else Tokens.muted,
+                        ),
+                    )
+                }
                 Box(Modifier.height(2.dp).fillMaxWidth().background(if (active) Tokens.text else Color.Transparent))
             }
         }
     }
 }
+
+private fun tabIcon(tab: PanelTab): AppIcon =
+    when (tab) {
+        PanelTab.SUMMARY -> AppIcon.SUMMARY
+        PanelTab.SPEC -> AppIcon.DOC
+        PanelTab.EVENTS -> AppIcon.CLOCK
+        PanelTab.RUNS -> AppIcon.PLAY
+    }
 
 private fun tabLabel(tab: PanelTab): String =
     when (tab) {
@@ -375,15 +386,7 @@ private fun ClosureEntry(detail: CardDetail, closure: ClosureController) {
     if (open) {
         Section(Texts.CLOSURE_OPEN) { ClosureScreen(closure, detail.events, detail.id) { open = false } }
     } else {
-        BasicText(
-            Texts.CLOSURE_OPEN,
-            modifier = Modifier
-                .heightIn(min = 24.dp)
-                .border(1.dp, Tokens.edgeHi, RoundedCornerShape(8.dp))
-                .clickable(role = Role.Button) { open = true }
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            style = body(Tokens.text),
-        )
+        AppButton(Texts.CLOSURE_OPEN, AppIcon.DOC) { open = true }
     }
 }
 
@@ -408,11 +411,11 @@ private fun SpecReviewActions(cardId: String, controller: SpecReviewController) 
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ActionButton(Texts.APPROVE, primary = true, enabled = !busy) {
+            AppButton(Texts.APPROVE, AppIcon.CHECK, ButtonKind.ACCENT, enabled = !busy) {
                 askedForChange = false
                 scope.launch { controller.approve(cardId) }
             }
-            ActionButton(Texts.REQUEST_CHANGE, primary = false, enabled = !busy && !state.notePending) {
+            AppButton(Texts.REQUEST_CHANGE, AppIcon.UNDO, enabled = !busy && !state.notePending) {
                 askedForChange = true
                 scope.launch { controller.requestChange(cardId, null) }
             }
@@ -429,29 +432,6 @@ private fun SpecReviewActions(cardId: String, controller: SpecReviewController) 
         }
         state.notice?.let { NoticeLine(it, controller::dismissNotice) }
     }
-}
-
-@Composable
-private fun ActionButton(label: String, primary: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(8.dp)
-    BasicText(
-        label,
-        modifier = Modifier
-            .alpha(if (enabled) 1f else 0.45f)
-            .heightIn(min = 32.dp)
-            .onFocusChanged { focused = it.isFocused }
-            .background(if (primary) Tokens.text else Color.Transparent, shape)
-            .border(if (focused) 2.dp else 1.dp, if (focused) Tokens.sand else if (primary) Tokens.text else Tokens.edgeHi, shape)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
-        style = TextStyle(
-            fontFamily = sans,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (primary) Tokens.ground else Tokens.text,
-        ),
-    )
 }
 
 /** The mandatory note of a change request; Enter sends, Shift+Enter breaks the line, Esc cancels. */
@@ -488,8 +468,8 @@ private fun ChangeNote(enabled: Boolean, onSend: (String) -> Unit, onCancel: () 
         )
         if (text.isBlank()) BasicText(Texts.NOTE_REQUIRED, style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.muted))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ActionButton(Texts.SEND_NOTE, primary = true, enabled = enabled) { onSend(text) }
-            ActionButton(Texts.CANCEL, primary = false, enabled = enabled, onClick = onCancel)
+            AppButton(Texts.SEND_NOTE, AppIcon.SEND, ButtonKind.PRIMARY, enabled = enabled) { onSend(text) }
+            AppButton(Texts.CANCEL, AppIcon.CLOSE, enabled = enabled, onClick = onCancel)
         }
     }
 }
@@ -508,7 +488,7 @@ private fun NoticeLine(notice: MoveNotice, onDismiss: () -> Unit) {
     ) {
         BasicText(label, style = body(Tokens.bad).copy(fontWeight = FontWeight.SemiBold))
         BasicText(notice.text, style = body(Tokens.text))
-        Row { ActionButton(Texts.DISMISS_NOTICE, primary = false, enabled = true, onClick = onDismiss) }
+        Row { AppButton(Texts.DISMISS_NOTICE, AppIcon.CLOSE, onClick = onDismiss) }
     }
 }
 

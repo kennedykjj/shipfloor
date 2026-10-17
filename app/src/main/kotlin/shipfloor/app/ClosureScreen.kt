@@ -75,11 +75,11 @@ fun ClosureScreen(controller: ClosureController, events: List<TimelineEvent>, ca
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             when (state) {
-                is ClosureState.Draft -> Action(Texts.CLOSURE_CONFIRM, primary = true, onClick = confirm)
-                is ClosureState.Failed -> Action(Texts.RETRY, primary = true, onClick = confirm)
+                is ClosureState.Draft -> AppButton(Texts.CLOSURE_CONFIRM, AppIcon.CHECK, ButtonKind.PRIMARY, onClick = confirm)
+                is ClosureState.Failed -> AppButton(Texts.RETRY, AppIcon.REFRESH, ButtonKind.PRIMARY, onClick = confirm)
                 else -> Unit
             }
-            Action(Texts.BACK, primary = false, onClick = onBack)
+            AppButton(Texts.BACK, AppIcon.ARROW_LEFT, onClick = onBack)
         }
     }
 }
@@ -109,17 +109,3 @@ private fun Line(text: String, color: Color) {
     BasicText(text, style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = color))
 }
 
-@Composable
-private fun Action(label: String, primary: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(8.dp)
-    val frame = if (primary) Modifier.background(Tokens.raise, shape).border(1.dp, Tokens.edgeHi, shape) else Modifier.border(1.dp, Tokens.edge, shape)
-    BasicText(
-        label,
-        modifier = Modifier
-            .heightIn(min = 24.dp)
-            .then(frame)
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.text),
-    )
-}

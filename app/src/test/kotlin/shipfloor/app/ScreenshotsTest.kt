@@ -14,6 +14,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import org.assertj.core.api.Assertions.assertThat
 import org.jetbrains.skia.EncodedImageFormat
 import org.junit.jupiter.api.AfterEach
@@ -70,6 +71,20 @@ object ScreenFixtures {
         criteria = listOf(CriterionRow("AC-1", "app", "AppTest.kt", "PASS"), CriterionRow("AC-2", "app", "AppTest.kt", "none")),
     )
 
+    fun feed(): FeedState = FeedState(
+        day = LocalDate.now(),
+        rows = listOf(
+            FeedRow(1, "13:52", "Card movido", "agent:claude", "#e04c68d2", FeedOutcome.Ok),
+            FeedRow(2, "13:58", "Gate falhou", "gate:daemon-red", "#e04c68d2", FeedOutcome.Failed),
+            FeedRow(3, "14:04", "Spec escrita", "agent:po", "#91d2e7a0", FeedOutcome.None),
+        ),
+        loading = false,
+        connection = FeedConnection.Live,
+        earlierHistoryUnavailable = false,
+        cost = CostSummaryView(CostLine("Total do dia", "US$ 9,74 est.", null, null, LimitState.NoLimit), emptyList(), false),
+        stages = listOf(StageChip(null, 3), StageChip("refine", 1), StageChip("develop", 2)),
+    )
+
     fun pulse(): PulseView = PulseView(
         freshness = PulseFreshness.Live,
         stateText = "Trabalhando",
@@ -109,6 +124,22 @@ class ScreenshotsTest {
         }
     }
 
+    @Test
+    fun `renders the feed screen to PNG files`() {
+        val out = Path.of("build", "screens").also { Files.createDirectories(it) }
+        listOf(true to "dark", false to "light").forEach { (dark, name) ->
+            val file = out.resolve("feed-$name.png")
+            render(1440, 900, file) {
+                Tokens.dark = dark
+                Column(Modifier.fillMaxSize().background(Tokens.ground)) {
+                    AppBar(AppSection.FEED, feedAvailable = true, onSelect = {}, onSettings = {}, onSearch = {}, theme = ThemeChoice.SYSTEM, onTheme = {})
+                    Box(Modifier.weight(1f)) { FeedScreen(ScreenFixtures.feed(), LocalDate.now().plusDays(1), onSelectDay = {}) }
+                }
+            }
+            assertThat(Files.size(file)).isGreaterThan(10_000L)
+        }
+    }
+
     @Composable
     private fun FactoryContent(dark: Boolean, openCard: Boolean = false, chips: Boolean = false) {
         Tokens.dark = dark
@@ -132,6 +163,7 @@ class ScreenshotsTest {
                                 onTab = {},
                                 onResize = {},
                                 onClose = {},
+                                specReview = SpecReviewFixtures.controller().controller,
                             )
                         }
                     },

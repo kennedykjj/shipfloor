@@ -130,34 +130,14 @@ private fun Header(state: FeedState, today: LocalDate, onSelectDay: (LocalDate) 
             )
         }
         Box(Modifier.weight(1f))
-        FocusableText("‹", Texts.PREVIOUS_DAY, enabled = true) { onSelectDay(state.day.minusDays(1)) }
+        IconButton(AppIcon.CHEVRON_LEFT, Texts.PREVIOUS_DAY) { onSelectDay(state.day.minusDays(1)) }
         BasicText(
             if (isToday) Texts.TODAY else DAY_FORMAT.format(state.day),
             style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.text),
         )
-        FocusableText("›", if (isToday) Texts.CURRENT_DAY else Texts.NEXT_DAY, enabled = !isToday) { onSelectDay(state.day.plusDays(1)) }
-        if (!isToday) FocusableText(Texts.TODAY, Texts.TODAY, enabled = true) { onSelectDay(today) }
+        IconButton(AppIcon.CHEVRON_RIGHT, if (isToday) Texts.CURRENT_DAY else Texts.NEXT_DAY, enabled = !isToday) { onSelectDay(state.day.plusDays(1)) }
+        if (!isToday) AppButton(Texts.TODAY, AppIcon.CALENDAR) { onSelectDay(today) }
     }
-}
-
-/** A text button of at least 32dp with the `sand` focus ring (the only place the accent is used). */
-@Composable
-private fun FocusableText(text: String, description: String, enabled: Boolean, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(6.dp)
-    BasicText(
-        text,
-        modifier = Modifier
-            .heightIn(min = 32.dp)
-            .widthIn(min = 32.dp)
-            .onFocusChanged { focused = it.isFocused }
-            .border(2.dp, if (focused) Tokens.sand else Color.Transparent, shape)
-            .clickable(enabled = enabled, onClick = onClick)
-            .focusable(enabled)
-            .padding(horizontal = 8.dp, vertical = 6.dp)
-            .semantics { contentDescription = description },
-        style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = if (enabled) Tokens.soft else Tokens.faint),
-    )
 }
 
 @Composable
@@ -195,8 +175,8 @@ private fun EventList(rows: List<FeedRow>, compact: Boolean) {
             items(rows, key = { it.seq }) { EventRow(it, compact) }
         }
         if (unseen > 0) {
-            Box(Modifier.align(Alignment.BottomCenter).background(Tokens.panel, RoundedCornerShape(8.dp))) {
-                FocusableText(Texts.newEvents(unseen), Texts.newEvents(unseen), enabled = true) { seen = rows.size }
+            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp)) {
+                AppButton(Texts.newEvents(unseen), AppIcon.ARROW_DOWN, ButtonKind.PRIMARY) { seen = rows.size }
             }
         }
     }

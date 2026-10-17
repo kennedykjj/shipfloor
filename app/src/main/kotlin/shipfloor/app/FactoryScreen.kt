@@ -68,9 +68,9 @@ fun AppBar(
             BasicText(Texts.TITLE, style = TextStyle(fontFamily = sans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Tokens.text))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            NavItem(Texts.NAV_FACTORY, selected = section == AppSection.BOARD) { onSelect(AppSection.BOARD) }
-            if (feedAvailable) NavItem(Texts.FEED_TITLE, selected = section == AppSection.FEED) { onSelect(AppSection.FEED) }
-            if (onSettings != null) NavItem(Texts.NAV_SETTINGS, selected = false, onClick = onSettings)
+            NavItem(Texts.NAV_FACTORY, AppIcon.BOARD, selected = section == AppSection.BOARD) { onSelect(AppSection.BOARD) }
+            if (feedAvailable) NavItem(Texts.FEED_TITLE, AppIcon.FEED, selected = section == AppSection.FEED) { onSelect(AppSection.FEED) }
+            if (onSettings != null) NavItem(Texts.NAV_SETTINGS, AppIcon.GEAR, selected = false, onClick = onSettings)
         }
         Spacer(Modifier.weight(1f))
         SearchButton(onSearch)
@@ -100,21 +100,22 @@ fun BrandMark(size: Dp = 22.dp) {
 }
 
 @Composable
-private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit) {
-    BasicText(
-        label,
+private fun NavItem(label: String, icon: AppIcon, selected: Boolean, onClick: () -> Unit) {
+    Row(
         modifier = Modifier
             .height(32.dp)
             .background(if (selected) Tokens.raise else Color.Transparent, RoundedCornerShape(6.dp))
             .clickable(role = Role.Tab, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        style = TextStyle(
-            fontFamily = sans,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = if (selected) Tokens.text else Tokens.muted,
-        ),
-    )
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        IconGlyph(icon, if (selected) Tokens.text else Tokens.muted)
+        BasicText(
+            label,
+            style = TextStyle(fontFamily = sans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (selected) Tokens.text else Tokens.muted),
+        )
+    }
 }
 
 @Composable
@@ -129,6 +130,7 @@ private fun SearchButton(onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        IconGlyph(AppIcon.SEARCH, Tokens.faint)
         BasicText(
             Texts.SEARCH_HINT,
             modifier = Modifier.weight(1f),

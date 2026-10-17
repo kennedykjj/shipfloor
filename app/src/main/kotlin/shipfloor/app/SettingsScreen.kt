@@ -110,7 +110,7 @@ fun SettingsScreen(client: SettingsClient, onBack: () -> Unit) {
 
     Column(Modifier.fillMaxSize().background(Tokens.ground)) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            GhostButton(Texts.BACK, enabled = !saving, onClick = onBack)
+            IconButton(AppIcon.ARROW_LEFT, Texts.BACK, enabled = !saving, onClick = onBack)
             Label(Texts.SETTINGS_TITLE, 17, FontWeight.SemiBold, Tokens.text)
         }
         when (val state = loaded) {
@@ -281,8 +281,8 @@ private fun Editor(
                             else -> Label(Texts.changes(state.changeCount), 14, FontWeight.Normal, Tokens.text)
                         }
                     }
-                    GhostButton(Texts.DISCARD, enabled, onDiscard)
-                    FilledButton(Texts.SAVE, enabled && badInputs.isEmpty(), onSave)
+                    AppButton(Texts.DISCARD, AppIcon.UNDO, enabled = enabled, onClick = onDiscard)
+                    AppButton(Texts.SAVE, AppIcon.CHECK, ButtonKind.PRIMARY, enabled = enabled && badInputs.isEmpty(), onClick = onSave)
                 }
             }
         }
@@ -330,9 +330,9 @@ private fun Label(text: String, size: Int, weight: FontWeight, color: Color) {
 @Composable
 private fun Stepper(value: Int, enabled: Boolean, onChange: (Int) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        GhostButton("−", enabled && value > 1) { onChange(value - 1) }
+        IconButton(AppIcon.MINUS, Texts.DECREASE, enabled = enabled && value > 1) { onChange(value - 1) }
         BasicText(value.toString(), style = TextStyle(fontFamily = mono, fontSize = 14.sp, color = Tokens.text))
-        GhostButton("+", enabled) { onChange(value + 1) }
+        IconButton(AppIcon.PLUS, Texts.INCREASE, enabled = enabled) { onChange(value + 1) }
     }
 }
 
@@ -372,32 +372,6 @@ private fun Chip(text: String, on: Boolean, enabled: Boolean, onToggle: () -> Un
 }
 
 @Composable
-private fun GhostButton(text: String, enabled: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier.heightIn(min = 24.dp)
-            .border(1.dp, Tokens.edge, RoundedCornerShape(8.dp))
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Label(text, 14, FontWeight.Normal, if (enabled) Tokens.text else Tokens.faint)
-    }
-}
-
-@Composable
-private fun FilledButton(text: String, enabled: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier.heightIn(min = 24.dp)
-            .background(if (enabled) Tokens.text else Tokens.edge, RoundedCornerShape(8.dp))
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 4.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Label(text, 14, FontWeight.SemiBold, if (enabled) Tokens.ground else Tokens.faint)
-    }
-}
-
-@Composable
 private fun Banner(text: String, onRetry: (() -> Unit)?) {
     Row(
         Modifier.fillMaxWidth().border(1.dp, Tokens.bad, RoundedCornerShape(12.dp)).padding(12.dp),
@@ -405,7 +379,7 @@ private fun Banner(text: String, onRetry: (() -> Unit)?) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(Modifier.weight(1f)) { Label(text, 14, FontWeight.Normal, Tokens.bad) }
-        onRetry?.let { GhostButton(Texts.RETRY, true, it) }
+        onRetry?.let { AppButton(Texts.RETRY, AppIcon.REFRESH, onClick = it) }
     }
 }
 

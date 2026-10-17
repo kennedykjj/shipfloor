@@ -64,14 +64,7 @@ fun ConnectionScreen(state: ConnectionState, onOpenSettings: (() -> Unit)? = nul
 
 @Composable
 internal fun SettingsButton(onClick: () -> Unit) {
-    BasicText(
-        Texts.OPEN_SETTINGS,
-        modifier = Modifier
-            .border(1.dp, Tokens.edge, RoundedCornerShape(8.dp))
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.text),
-    )
+    AppButton(Texts.OPEN_SETTINGS, AppIcon.GEAR, onClick = onClick)
 }
 
 @Composable
