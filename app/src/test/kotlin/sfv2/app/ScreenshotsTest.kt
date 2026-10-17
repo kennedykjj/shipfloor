@@ -100,6 +100,9 @@ class ScreenshotsTest {
             val panel = out.resolve("panel-$name.png")
             render(1440, 900, panel) { FactoryContent(dark, openCard = true) }
             assertThat(Files.size(panel)).isGreaterThan(10_000L)
+            val chips = out.resolve("chips-$name.png")
+            render(1440, 900, chips) { FactoryContent(dark, chips = true) }
+            assertThat(Files.size(chips)).isGreaterThan(10_000L)
             val narrow = out.resolve("factory-$name-1000.png")
             render(1000, 700, narrow) { FactoryContent(dark) }
             assertThat(Files.size(narrow)).isGreaterThan(10_000L)
@@ -107,7 +110,7 @@ class ScreenshotsTest {
     }
 
     @Composable
-    private fun FactoryContent(dark: Boolean, openCard: Boolean = false) {
+    private fun FactoryContent(dark: Boolean, openCard: Boolean = false, chips: Boolean = false) {
         Tokens.dark = dark
         Column(Modifier.fillMaxSize().background(Tokens.ground)) {
             AppBar(AppSection.BOARD, feedAvailable = true, onSelect = {}, onSettings = {}, onSearch = {}, theme = ThemeChoice.SYSTEM, onTheme = {})
@@ -116,6 +119,7 @@ class ScreenshotsTest {
                     view = ScreenFixtures.view(),
                     pulse = ScreenFixtures.pulse(),
                     connected = true,
+                    initialLayout = if (chips) ColumnLayoutState().withDensity(BoardDensity.CHIPS) else ColumnLayoutState(),
                     openCardId = if (openCard) "7c113339-0000" else null,
                     panelWidth = 520.dp,
                     sidePanel = { width ->

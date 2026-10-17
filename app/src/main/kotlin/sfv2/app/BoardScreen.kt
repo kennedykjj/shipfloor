@@ -108,6 +108,7 @@ fun BoardScreen(
     openCardId: String? = null,
     focusReturnCardId: String? = null,
     onOpenCard: (String) -> Unit = {},
+    initialLayout: ColumnLayoutState = ColumnLayoutState(),
 ) {
     val scope = rememberCoroutineScope()
     var reloading by remember { mutableStateOf(false) }
@@ -116,7 +117,7 @@ fun BoardScreen(
     val move by (controller?.state ?: remember { MutableStateFlow(OwnerMoveState()) }).collectAsState()
     val scrollState = rememberScrollState()
     var viewportPx by remember { mutableStateOf(0) }
-    var layout by remember { mutableStateOf(ColumnLayoutState()) }
+    var layout by remember { mutableStateOf(initialLayout) }
     Column(
         modifier = Modifier.fillMaxSize().background(Tokens.ground).padding(top = 12.dp).semantics { contentDescription = Texts.BOARD },
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -588,6 +589,7 @@ private fun Modifier.vertical(): Modifier =
         }
     }
 
+/** A chip: the state glyph and the title on one line; the full face lives in the accessibility description. */
 @Composable
 private fun Chip(card: BoardCard, open: Boolean, takesFocus: Boolean, onOpenCard: (String) -> Unit) {
     val shape = RoundedCornerShape(6.dp)
@@ -595,8 +597,7 @@ private fun Chip(card: BoardCard, open: Boolean, takesFocus: Boolean, onOpenCard
     val focus = remember { FocusRequester() }
     LaunchedEffect(takesFocus) { if (takesFocus) focus.requestFocus() }
     val waiting = isWaitingForOwner(card.column)
-    BasicText(
-        card.id.take(ID_LENGTH),
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(if (open) Tokens.raise else Tokens.panel, shape)
@@ -609,10 +610,19 @@ private fun Chip(card: BoardCard, open: Boolean, takesFocus: Boolean, onOpenCard
             .focusRequester(focus)
             .onFocusChanged { focused = it.isFocused }
             .clickable(role = Role.Button) { onOpenCard(card.id) }
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        maxLines = 1,
-        style = TextStyle(fontFamily = mono, fontSize = 12.sp, color = if (waiting) Tokens.sand else Tokens.muted),
-    )
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        StatusGlyph(glyphOf(card.column, card.blocked), size = 12.dp)
+        BasicText(
+            card.title,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = TextStyle(fontFamily = sans, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Tokens.text),
+        )
+    }
 }
 
 /** The grip in the column header: drag, double click to reset, Left/Right to nudge by [ColumnLayoutState.KEY_STEP]. */

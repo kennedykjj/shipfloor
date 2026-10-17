@@ -154,6 +154,7 @@ fun FactoryScreen(
     openCardId: String? = null,
     focusReturnCardId: String? = null,
     onOpenCard: (String) -> Unit = {},
+    initialLayout: ColumnLayoutState = ColumnLayoutState(),
     panelWidth: Dp = 0.dp,
     sidePanel: @Composable (Dp) -> Unit = {},
 ) {
@@ -176,6 +177,7 @@ fun FactoryScreen(
                     openCardId = openCardId,
                     focusReturnCardId = focusReturnCardId,
                     onOpenCard = onOpenCard,
+                    initialLayout = initialLayout,
                 )
             }
             when (panelPlacement(maxWidth.value.toInt())) {
