@@ -27,7 +27,7 @@ val extraJvm = providers.gradleProperty("jvm").orElse("")
 
 compose.desktop {
     application {
-        mainClass = "sfv2.spike.MainKt"
+        mainClass = "shipfloor.spike.MainKt"
         // `run` uses the JVM that runs Gradle unless told otherwise; this machine's system JDK is headless.
         javaHome = javaToolchains.launcherFor(jbr).get().metadata.installationPath.asFile.absolutePath
         jvmArgs += listOf("-Dspike.seconds=${seconds.get()}")

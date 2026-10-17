@@ -29,7 +29,7 @@ jobs:
       # Pressupõe, em app/build.gradle.kts:
       #   compose.desktop.application.nativeDistributions {
       #     targetFormats(TargetFormat.Deb, TargetFormat.Rpm)
-      #     packageName = "sfv2"
+      #     packageName = "shipfloor"
       #   }
       - run: ./gradlew :app:packageDeb :app:packageRpm --console=plain
       - name: Publicar no release

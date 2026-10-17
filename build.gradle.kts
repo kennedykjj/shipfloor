@@ -1,3 +1,3 @@
 plugins {
-    id("sfv2.module-boundaries")
+    id("shipfloor.module-boundaries")
 }

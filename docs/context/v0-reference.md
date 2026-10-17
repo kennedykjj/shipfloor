@@ -1,8 +1,8 @@
 # O que olhar na V0
 
-A sfv2 não copia código da V0, mas a V0 já resolveu (e errou) muita coisa. Antes de implementar um card, conferir aqui se existe especificação viva. Caminhos relativos a `~/git/shipfloor`.
+A shipfloor não copia código da V0, mas a V0 já resolveu (e errou) muita coisa. Antes de implementar um card, conferir aqui se existe especificação viva. Caminhos relativos a `~/git/shipfloor`.
 
-| Assunto na sfv2 | Onde está na V0 | Para quê |
+| Assunto na shipfloor | Onde está na V0 | Para quê |
 |---|---|---|
 | Contrato de cada script, linhas de log, marcadores | `docs/contracts.md` | O que dispatcher, gates e deploy prometem uns aos outros |
 | Colunas e movimentos do dono (S1-03) | `DESIGN.md` (movimentos M1 a M7), testes `scripts/test/py/dashboard_belt.py` | Quem pode mover o quê |
@@ -19,8 +19,8 @@ A sfv2 não copia código da V0, mas a V0 já resolveu (e errou) muita coisa. An
 
 ## Lições da V0 que viram regra aqui
 
-- **#282:** card em Ready for Prod com PR mergeado fora da fábrica ficava preso para sempre. Na sfv2 é o S3-06.
-- **Cota GraphQL (2026-10-14):** ler board em loop parou a fábrica. Na sfv2 o estado é local; na V0, ler pelo `board.tsv` e pela REST.
-- **staged-head:** o merge exige que o head do PR seja o que o dono aprovou. Na sfv2 é o S3-04.
-- **Comentários como prova de aprovação** (`deploy.py:460`): frágil e sujeito a injeção. Na sfv2 a aprovação é evento assinado.
-- **Agente lendo comentário de qualquer pessoa** num repositório público é instrução de estranho. Na sfv2 o texto externo entra por uma porta só, marcado.
+- **#282:** card em Ready for Prod com PR mergeado fora da fábrica ficava preso para sempre. Na shipfloor é o S3-06.
+- **Cota GraphQL (2026-10-14):** ler board em loop parou a fábrica. Na shipfloor o estado é local; na V0, ler pelo `board.tsv` e pela REST.
+- **staged-head:** o merge exige que o head do PR seja o que o dono aprovou. Na shipfloor é o S3-04.
+- **Comentários como prova de aprovação** (`deploy.py:460`): frágil e sujeito a injeção. Na shipfloor a aprovação é evento assinado.
+- **Agente lendo comentário de qualquer pessoa** num repositório público é instrução de estranho. Na shipfloor o texto externo entra por uma porta só, marcado.

@@ -1,10 +1,10 @@
 # Decisões
 
-Registro das decisões que formaram a sfv2, com o motivo e o que foi descartado. Tomadas entre o dono e o Claude em 2026-10-15, antes do primeiro código. Desenho completo, com fluxos interativos: https://claude.ai/artifact/8D5VdReqza6nbwu3EMLH9u.
+Registro das decisões que formaram a shipfloor, com o motivo e o que foi descartado. Tomadas entre o dono e o Claude em 2026-10-15, antes do primeiro código. Desenho completo, com fluxos interativos: https://claude.ai/artifact/8D5VdReqza6nbwu3EMLH9u.
 
 Decisão nova ou revisada entra aqui no mesmo PR que a aplica.
 
-## Por que existe uma sfv2
+## Por que existe uma shipfloor
 
 O Shipfloor V0 guarda o estado de cada card num GitHub Project v2. Toda leitura e escrita cruza a rede e disputa a cota GraphQL (5.000 pontos por hora, compartilhada com a fábrica, estourou em 2026-10-14 e parou o dispatcher). O dashboard enxerga uma cópia de até 3 minutos. Mover um card é uma escrita REST. Os agentes comentam na issue no meio do trabalho e a aprovação vira um comentário que o deploy precisa interpretar.
 
@@ -43,4 +43,4 @@ Objetivo do produto: uma squad de desenvolvimento para cada desenvolvedor, tanto
 
 ## Em aberto
 
-- Nome definitivo (`sfv2` é provisório).
+- Nome definitivo (`shipfloor` é provisório).

@@ -1,5 +1,5 @@
 plugins {
-    id("sfv2.kotlin-jvm")
+    id("shipfloor.kotlin-jvm")
     alias(libs.plugins.sqldelight)
 }
 
@@ -10,8 +10,8 @@ dependencies {
 
 sqldelight {
     databases {
-        create("Sfv2Database") {
-            packageName.set("sfv2.store.db")
+        create("ShipfloorDatabase") {
+            packageName.set("shipfloor.store.db")
             verifyMigrations.set(true)
             schemaOutputDirectory.set(file("src/main/sqldelight/databases"))
         }

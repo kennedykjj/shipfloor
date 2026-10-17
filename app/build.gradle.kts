@@ -1,7 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
-    id("sfv2.kotlin-jvm")
+    id("shipfloor.kotlin-jvm")
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
     id("org.jetbrains.kotlin.plugin.serialization")
@@ -18,16 +18,16 @@ dependencies {
 
 compose.desktop {
     application {
-        mainClass = "sfv2.app.MainKt"
+        mainClass = "shipfloor.app.MainKt"
         // The window is opaque and stays on OpenGL: no skiko.renderApi=SOFTWARE (spike S0-07).
 
         nativeDistributions {
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm)
-            packageName = "sfv2"
+            packageName = "shipfloor"
             // jpackage requires MAJOR.MINOR.PATCH.
             packageVersion = "1.0.0"
             description = "Local software factory: agents refine, implement and validate; the owner decides."
-            vendor = "sfv2"
+            vendor = "shipfloor"
         }
     }
 }

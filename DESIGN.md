@@ -126,7 +126,7 @@ components:
     width: "min(660px, 52vw)"
 ---
 
-> sfv2: herdado do DESIGN.md do Shipfloor V0 como base. Descreve o dashboard web da V0; o app em Compose (fase 6) reaproveita tokens, tipografia e comportamento, e este documento será adaptado nessa fase. Mudança aqui é proposta antes de virar código.
+> Shipfloor: herdado do DESIGN.md do Shipfloor V0 como base. Descreve o dashboard web da V0; o app em Compose (fase 6) reaproveita tokens, tipografia e comportamento, e este documento será adaptado nessa fase. Mudança aqui é proposta antes de virar código.
 
 # Design System: Shipfloor Dashboard
 
@@ -308,21 +308,22 @@ Esc folds Request changes (the note stays), then closes the maximized panel or t
 
 ## Direction: Canon (decided 2026-10-17)
 
-The owner saw three complete directions (`docs/design/direcoes-visuais.html`: Canon, Departures board, Line map) and chose **Canon**: the finish of Vercel and Raycast, applied with rigor. It replaces the colors, the type and the stage hues of the Floor Plan for the sfv2 desktop app; the structure of "Target: the Board" below still holds. The test of the screen: read at a glance from a window left open all day, never a website in a frame, never childish, cold or crowded.
+The owner saw three complete directions (`docs/design/direcoes-visuais.html`: Canon, Departures board, Line map) and chose **Canon**: the finish of Vercel and Raycast, applied with rigor. It replaces the colors, the type and the stage hues of the Floor Plan for the shipfloor desktop app; the structure of "Target: the Board" below still holds. The test of the screen: read at a glance from a window left open all day, never a website in a frame, never childish, cold or crowded.
 
 - **Neutral scale, one accent.** Ground `#000` / panel `#0a0a0a` / raise `#111` / hairline `#262626` / lit hairline `#3d3d3d` / text `#ededed` (dark); `#fafafa` / `#fff` / `#f4f4f4` / `#e6e6e6` / `#cfcfcf` / `#171717` (light). Follows the system theme; both are designed, neither is an inversion of the other.
 - **The accent is amber** (`#f5a623`) and marks only what waits for the owner: the alert glyph, the dot on a waiting column, the border of a waiting card, "N esperam a sua decisão" and the action that answers it. As text it is `#ffb84d` on dark and `#9a5b00` on light (`sand`); as a fill it is always `#f5a623` with `#1a1100` text. Outcomes: ok `#3ecf8e` / `#14804a`, bad `#ff6b6b` / `#cf222e`.
 - **Stages are told apart by shape and word, never by hue.** One glyph per card state: dashed ring (queued), spinning arc (an agent works on it), amber alert (waits for the owner), green check (delivered), red cross (blocked). The stage hues (`refine`, `develop`, `validate`) are gone and the three tokens now alias neutral text colors.
 - **Type: Geist and Geist Mono** (SIL OFL, embedded in `app/src/main/resources/fonts`). Sans for everything, mono only for ids. Scale: 22 (counts), 20 (the factory's state), 15 (brand), 14 (card titles, body), 13 (controls, lane names), 12 (meta). Figures keep tabular figures.
 - **Shape and depth.** Radius 8 for cards and the strip, 6 for buttons and fields. Borders are 1 dp hairlines; no shadow and no fill on a stage. A lane has no box: only a hairline on its right edge.
+- **Brand.** The Shipfloor mark of the V0 (`docs/img/icon.svg`): floor tape in `#f2c230` that takes a card from the Inbox to Done, ending in an off-white card, on a `#0c0c0b` tile. It is the app icon, the tray icon (with an amber badge when the owner is wanted) and the mark in the app bar, always on its own dark tile whatever the theme; the word is set in Geist SemiBold. The amber accent of the interface stays `#f5a623`.
 - **Shell.** App bar (52 dp): brand, Fábrica / Feed do dia / Configurações, the search that opens the palette. Under it the header: what the factory says (20 sp, with its glyph) and how many wait, then sessions, the day's ceiling (a 4 dp meter, always "est.") and the forecast. Then the layout controls, the column strip (count and short name per column, a dot on the waiting ones, a line under those in view) and the lanes.
 - **Cards** show the glyph, the 8-character id, the title (up to two lines, medium) and "há 4 h 43 min · US$ 0,21 est."; the cost is left out when it is unknown, never shown as a zero or as "custo desconhecido".
-- **Continuous motion**: the spinner on a working card and the factory's glyph. Nothing else moves at rest; both stop under `SFV2_REDUCED_MOTION`.
-- **Checking a change of look.** `./gradlew :app:test --tests sfv2.app.ScreenshotsTest` renders the Factory screen (1440 and 1000 px, with and without the card panel, both themes) to `app/build/screens/*.png`; look at them before and after.
+- **Continuous motion**: the spinner on a working card and the factory's glyph. Nothing else moves at rest; both stop under `SHIPFLOOR_REDUCED_MOTION`.
+- **Checking a change of look.** `./gradlew :app:test --tests shipfloor.app.ScreenshotsTest` renders the Factory screen (1440 and 1000 px, with and without the card panel, both themes) to `app/build/screens/*.png`; look at them before and after.
 
-## Target: the Board (sfv2 app)
+## Target: the Board (shipfloor app)
 
-Decided by the owner on 2026-10-16 after the interactive reference `docs/design/interface-alvo.html` (open it in a browser: it works). Where this section and the rest of the document disagree, this section wins for the sfv2 desktop app (Compose). The reference is a visual and behavioral target, not code to copy; sample numbers in it (medians, costs per run, history) are illustrative.
+Decided by the owner on 2026-10-16 after the interactive reference `docs/design/interface-alvo.html` (open it in a browser: it works). Where this section and the rest of the document disagree, this section wins for the shipfloor desktop app (Compose). The reference is a visual and behavioral target, not code to copy; sample numbers in it (medians, costs per run, history) are illustrative.
 
 **What changes against the belt and the work area above**
 

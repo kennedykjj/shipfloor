@@ -1,6 +1,6 @@
 # Arquitetura
 
-Como a sfv2 está dividida, quem pode depender de quem e onde cada tipo de mudança entra. Uma mudança que altera uma fronteira descrita aqui atualiza este documento no mesmo PR.
+Como a shipfloor está dividida, quem pode depender de quem e onde cada tipo de mudança entra. Uma mudança que altera uma fronteira descrita aqui atualiza este documento no mesmo PR.
 
 ## Visão geral
 
@@ -32,7 +32,7 @@ Como a sfv2 está dividida, quem pode depender de quem e onde cada tipo de mudan
 | `app` | Compose Desktop. Cliente do socket. Não lê o banco. | `core` |
 | `e2e` | Só testes: critérios de saída de cada fase, caixa-preta contra daemon e CLI. | `core`, `store`, `ports`, `adapters`, `daemon`, `cli` |
 
-A tabela é verificada pelo build (`build-logic/src/main/kotlin/sfv2.module-boundaries.gradle.kts`): uma dependência fora dela falha a configuração. Mudar a tabela é decisão de arquitetura, feita à mão junto com este documento.
+A tabela é verificada pelo build (`build-logic/src/main/kotlin/shipfloor.module-boundaries.gradle.kts`): uma dependência fora dela falha a configuração. Mudar a tabela é decisão de arquitetura, feita à mão junto com este documento.
 
 ## Regras que valem em todo o código
 

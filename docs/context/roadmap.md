@@ -2,7 +2,7 @@
 
 Plano completo, interativo: https://claude.ai/artifact/MftqL6htDj2ngM4FsCVc9J. Os critérios de aceitação de cada issue estão no corpo dela no GitHub.
 
-Cada fase deixa a fábrica usável e só termina quando o teste de saída passa. As fases 0 a 5 estão detalhadas para a V0 executar; as fases 6 a 9 são rascunho e devem ser refinadas pela própria sfv2 depois do marco 5. A V0 constrói a sfv2 até a fase 5; dali em diante a sfv2 constrói a si mesma.
+Cada fase deixa a fábrica usável e só termina quando o teste de saída passa. As fases 0 a 5 estão detalhadas para a V0 executar; as fases 6 a 9 são rascunho e devem ser refinadas pela própria shipfloor depois do marco 5. A V0 constrói a shipfloor até a fase 5; dali em diante a shipfloor constrói a si mesma.
 
 ## Regras de liberação
 
@@ -18,12 +18,12 @@ Cada fase deixa a fábrica usável e só termina quando o teste de saída passa.
 
 | Issue | Item | Título | Camada | Bloqueada por | Estado |
 |---|---|---|---|---|---|
-| #1 | S0-01 | Criar o repositório sfv2 e o board | à mão | — | fechada |
+| #1 | S0-01 | Criar o repositório shipfloor e o board | à mão | — | fechada |
 | #2 | S0-02 | Esqueleto Gradle multi-módulo e convenções de build | à mão | #1 | fechada |
 | #3 | S0-03 | CI no GitHub Actions | à mão | #2 | fechada |
 | #4 | S0-04 | Contexto do projeto para os agentes | à mão | #1 | fechada |
 | #5 | S0-05 | factory.yml, permissões e registro na V0 | à mão | #2, #3, #4 | fechada |
-| #6 | S0-06 | CLI responde sfv2 --version | `cli` | #5 | fechada |
+| #6 | S0-06 | CLI responde shipfloor --version | `cli` | #5 | fechada |
 | #7 | S0-07 | Spike: Compose Desktop no Fedora com Wayland | à mão | #2 | fechada |
 
 ## Fase 1 · Núcleo
@@ -106,15 +106,15 @@ Cada fase deixa a fábrica usável e só termina quando o teste de saída passa.
 
 ## Fase 5 · Autossuficiência
 
-**Saída:** Dez cards consecutivos do próprio repositório entregues pela sfv2 com a V0 parada; só então a V0 é arquivada.
+**Saída:** Dez cards consecutivos do próprio repositório entregues pela shipfloor com a V0 parada; só então a V0 é arquivada.
 
 | Issue | Item | Título | Camada | Bloqueada por | Estado |
 |---|---|---|---|---|---|
 | #58 | S5-01 | Serviço systemd do usuário | `daemon` | #15 | aberta |
-| #59 | S5-02 | sfv2 doctor | `cli` | #58 | aberta |
+| #59 | S5-02 | shipfloor doctor | `cli` | #58 | aberta |
 | #60 | S5-03 | Importar os cards da V0 | `cli` | #54 | aberta |
 | #61 | S5-04 | Relatório de lead time e custo por card | `daemon` | #33 | aberta |
-| #62 | S5-05 | Virada: a sfv2 assume o próprio repositório | à mão | #58, #59, #60, #61 | aberta |
+| #62 | S5-05 | Virada: a shipfloor assume o próprio repositório | à mão | #58, #59, #60, #61 | aberta |
 
 ## Fase 6 · App desktop (rascunho)
 
@@ -155,7 +155,7 @@ Cada fase deixa a fábrica usável e só termina quando o teste de saída passa.
 | #79 | S8-02 | Serviço no macOS e no Windows | `daemon` | #78 | adiada (decisão 20/21) |
 | #80 | S8-03 | CI e pacotes para macOS e Windows | à mão | #79 | adiada (decisão 20/21) |
 | #81 | S8-04 | Atualizador automático | `app` | #80 | adiada (decisão 20/21) |
-| #82 | S8-05 | sfv2 init com prontidão do projeto | `cli` | #62 | aberta |
+| #82 | S8-05 | shipfloor init com prontidão do projeto | `cli` | #62 | aberta |
 | #83 | S8-06 | Rascunho assistido dos documentos do projeto | `daemon` | #82 | aberta |
 | #84 | S8-07 | CLI nativa com GraalVM | `cli` | #80 | aberta |
 

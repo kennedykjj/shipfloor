@@ -20,6 +20,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "sfv2"
+rootProject.name = "shipfloor"
 
 include("core", "store", "ports", "adapters", "daemon", "cli", "app", "e2e")

@@ -1,5 +1,5 @@
 plugins {
-    id("sfv2.kotlin-jvm")
+    id("shipfloor.kotlin-jvm")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 

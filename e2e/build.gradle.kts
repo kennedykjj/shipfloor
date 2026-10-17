@@ -1,5 +1,5 @@
 plugins {
-    id("sfv2.kotlin-jvm")
+    id("shipfloor.kotlin-jvm")
 }
 
 // Only tests live here: black-box checks of the phase exit criteria, written by QA.

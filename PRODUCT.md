@@ -2,7 +2,7 @@
 
 <!-- impeccable:product-schema 1 -->
 
-sfv2 é o nome provisório da segunda versão do Shipfloor. Desenho, fluxos e decisões: https://claude.ai/artifact/8D5VdReqza6nbwu3EMLH9u. Plano de execução: https://claude.ai/artifact/MftqL6htDj2ngM4FsCVc9J.
+Shipfloor é a fábrica de software local; esta é a segunda versão (a primeira, o Shipfloor V0, está arquivada em `kennedykjj/shipfloor-legacy`). Desenho, fluxos e decisões: https://claude.ai/artifact/8D5VdReqza6nbwu3EMLH9u. Plano de execução: https://claude.ai/artifact/MftqL6htDj2ngM4FsCVc9J.
 
 ## Platform
 
@@ -17,7 +17,7 @@ Kotlin na JVM, Gradle multi-módulo. Daemon local com SQLite (SQLDelight), CLI (
 - O desenvolvedor sozinho com muitos projetos: projetos pessoais e vibe-coded, até dez numa máquina, sem configurar board nenhum.
 - O desenvolvedor dentro de uma empresa: Jira, revisores obrigatórios, convenções da empresa, trilha de auditoria. A fábrica produz; ele decide e assina.
 
-Um dono por fábrica, numa máquina. Não é ferramenta de time: colaboração acontece nas ferramentas da empresa, onde a sfv2 importa e fecha.
+Um dono por fábrica, numa máquina. Não é ferramenta de time: colaboração acontece nas ferramentas da empresa, onde a shipfloor importa e fecha.
 
 ## Product Purpose
 
@@ -51,4 +51,4 @@ Um daemon por máquina, sempre ligado, é o único escritor do estado. App, CLI 
 
 ## Brand Commitments
 
-Nome provisório: sfv2. Herda do Shipfloor a metáfora do chão de fábrica e o DESIGN.md. Um assistente da fábrica (personalidade sem rosto, com skins) entra na fase 7, sempre com modo silencioso.
+Nome: Shipfloor (o sfv2 foi o nome de trabalho). Herda do V0 a metáfora do chão de fábrica, o ícone (a fita de chão amarela que leva um card do Inbox ao Done) e o DESIGN.md. Um assistente da fábrica (personalidade sem rosto, com skins) entra na fase 7, sempre com modo silencioso.
