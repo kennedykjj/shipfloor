@@ -532,8 +532,12 @@ private fun Lane(
             timeLabel?.let { Meta(it, Tokens.faint, Modifier.padding(start = 14.dp, bottom = 6.dp)) }
         }
         Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 10.dp, end = 10.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(start = if (chips) 0.dp else 10.dp, end = if (chips) 0.dp else 10.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(if (chips) 0.dp else 10.dp),
         ) {
             when {
                 cards == null -> Meta(Texts.LOADING_BOARD, Tokens.faint)
@@ -589,10 +593,9 @@ private fun Modifier.vertical(): Modifier =
         }
     }
 
-/** A chip: the state glyph and the title on one line; the full face lives in the accessibility description. */
+/** A chip is a list row: the state glyph and the title on one line, no box; the full face is the accessibility description. */
 @Composable
 private fun Chip(card: BoardCard, open: Boolean, takesFocus: Boolean, onOpenCard: (String) -> Unit) {
-    val shape = RoundedCornerShape(6.dp)
     var focused by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(takesFocus) { if (takesFocus) focus.requestFocus() }
@@ -600,27 +603,28 @@ private fun Chip(card: BoardCard, open: Boolean, takesFocus: Boolean, onOpenCard
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (open) Tokens.raise else Tokens.panel, shape)
-            .border(
-                if (focused) 2.dp else 1.dp,
-                if (focused) Tokens.accent else if (open) Tokens.text else if (waiting) Tokens.sand.copy(alpha = 0.6f) else Tokens.edge,
-                shape,
-            )
+            .height(30.dp)
+            .background(if (open) Tokens.raise else Color.Transparent)
+            .drawBehind {
+                drawLine(Tokens.edge, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx())
+                if (focused) drawRect(Tokens.accent, style = Stroke(2.dp.toPx()))
+                if (waiting) drawRect(Tokens.accent, size = Size(2.dp.toPx(), size.height))
+            }
             .semantics { contentDescription = CardFace.of(card, Clock.systemUTC()).description }
             .focusRequester(focus)
             .onFocusChanged { focused = it.isFocused }
             .clickable(role = Role.Button) { onOpenCard(card.id) }
-            .padding(horizontal = 8.dp, vertical = 7.dp),
+            .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        StatusGlyph(glyphOf(card.column, card.blocked), size = 12.dp)
+        StatusGlyph(glyphOf(card.column, card.blocked), size = 11.dp)
         BasicText(
             card.title,
             modifier = Modifier.weight(1f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            style = TextStyle(fontFamily = sans, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Tokens.text),
+            style = TextStyle(fontFamily = sans, fontSize = 12.5.sp, fontWeight = FontWeight.Normal, color = if (waiting) Tokens.sand else Tokens.soft),
         )
     }
 }
@@ -720,7 +724,7 @@ private fun Card(
                 if (focused) Tokens.accent else if (open) Tokens.text else if (waiting) Tokens.sand.copy(alpha = 0.6f) else Tokens.edge,
                 shape,
             )
-            .padding(horizontal = 12.dp, vertical = 11.dp)
+            .padding(horizontal = 14.dp, vertical = 13.dp)
             .semantics { contentDescription = description }
             .focusRequester(focus)
             .onFocusChanged { focused = it.isFocused }
@@ -756,23 +760,29 @@ private fun Card(
                     },
                 )
             },
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            StatusGlyph(glyph)
-            BasicText(shortId, style = TextStyle(fontFamily = mono, fontSize = 12.sp, color = Tokens.faint))
+            StatusGlyph(glyph, size = 16.dp)
+            BasicText(shortId, style = TextStyle(fontFamily = mono, fontSize = 11.sp, color = Tokens.faint))
             face.blockedLabel?.let { BasicText(it, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.bad)) }
         }
         BasicText(
             card.title,
-            maxLines = 2,
+            maxLines = 3,
             overflow = TextOverflow.Ellipsis,
-            style = TextStyle(fontFamily = sans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Tokens.text, lineHeight = 18.sp),
+            style = TextStyle(fontFamily = sans, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Tokens.text, lineHeight = 20.sp),
         )
         val costKnown = card.cost?.let { it.costUsd != null && (it.status == CostStatus.KNOWN || it.status == CostStatus.PARTIAL) } == true
-        val meta = listOfNotNull(face.age, face.cost.takeIf { costKnown }, face.costNote.takeIf { costKnown }).joinToString(" · ")
-        if (meta.isNotEmpty()) {
-            BasicText(meta, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.muted, fontFeatureSettings = "tnum"))
+        val cost = listOfNotNull(face.cost.takeIf { costKnown }, face.costNote.takeIf { costKnown }).joinToString(" · ")
+        if (face.age != null || cost.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().drawBehind { drawLine(Tokens.edge, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }.padding(top = 9.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                BasicText(face.age.orEmpty(), style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.muted, fontFeatureSettings = "tnum"))
+                BasicText(cost, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.muted, fontFeatureSettings = "tnum"))
+            }
         }
     }
 }
