@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -283,7 +284,7 @@ private fun PanelTabs(selected: PanelTab, onSelect: (PanelTab) -> Unit) {
         PanelTab.entries.forEach { tab ->
             val active = tab == selected
             Column(
-                Modifier.selectable(selected = active, role = Role.Tab) { onSelect(tab) },
+                Modifier.width(IntrinsicSize.Max).selectable(selected = active, role = Role.Tab) { onSelect(tab) },
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 BasicText(

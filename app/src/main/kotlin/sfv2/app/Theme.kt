@@ -1,32 +1,131 @@
 package sfv2.app
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.platform.Font
+import java.util.prefs.Preferences
 import sfv2.core.NotificationType
 import sfv2.core.Column as BoardColumn
 
-/** Color tokens of DESIGN.md (charcoal theme). */
-object Tokens {
-    val ground = Color(0xFF0A0A0A)
-    val panel = Color(0xFF14171B)
-    val raise = Color(0xFF242830)
-    val edge = Color(0xFF2A2F39)
-    val edgeHi = Color(0xFF3D444F)
-    val text = Color(0xFFF2F1EE)
-    val soft = Color(0xFFD6D8DA)
-    val muted = Color(0xFFA3ABB6)
-    val faint = Color(0xFF8F98A3)
-    val sand = Color(0xFFC7B9A6)
-    val ok = Color(0xFF9FCBAA)
-    val warn = Color(0xFFDCB872)
-    val bad = Color(0xFFE58F80)
-    val refine = Color(0xFF8FA8C7)
-    val develop = Color(0xFF7FCDBF)
-    val validate = Color(0xFFC896EC)
+/** What the owner chose for the theme: follow the system, or force one. */
+enum class ThemeChoice { SYSTEM, LIGHT, DARK }
+
+/** Keeps the owner's theme choice between runs, in the user's preferences; a failure leaves the system theme. */
+object ThemePreference {
+    private const val KEY = "theme"
+    private val node get() = Preferences.userRoot().node("sfv2/app")
+
+    fun load(): ThemeChoice =
+        runCatching { ThemeChoice.valueOf(node.get(KEY, ThemeChoice.SYSTEM.name)) }.getOrDefault(ThemeChoice.SYSTEM)
+
+    fun save(choice: ThemeChoice) {
+        runCatching { node.put(KEY, choice.name) }
+    }
 }
 
-val sans = FontFamily.SansSerif
-val mono = FontFamily.Monospace
+/** One theme of the app: the neutral scale, the single accent (what waits for the owner) and the outcome colors. */
+class Palette(
+    val ground: Color,
+    val panel: Color,
+    val raise: Color,
+    val edge: Color,
+    val edgeHi: Color,
+    val text: Color,
+    val soft: Color,
+    val muted: Color,
+    val faint: Color,
+    val accent: Color,
+    val accentInk: Color,
+    val sand: Color,
+    val ok: Color,
+    val warn: Color,
+    val bad: Color,
+)
+
+private val DARK_PALETTE = Palette(
+    ground = Color(0xFF000000),
+    panel = Color(0xFF0A0A0A),
+    raise = Color(0xFF111111),
+    edge = Color(0xFF262626),
+    edgeHi = Color(0xFF3D3D3D),
+    text = Color(0xFFEDEDED),
+    soft = Color(0xFFD4D4D4),
+    muted = Color(0xFFA1A1A1),
+    faint = Color(0xFF8F8F8F),
+    accent = Color(0xFFF5A623),
+    accentInk = Color(0xFF1A1100),
+    sand = Color(0xFFFFB84D),
+    ok = Color(0xFF3ECF8E),
+    warn = Color(0xFFFFB84D),
+    bad = Color(0xFFFF6B6B),
+)
+
+private val LIGHT_PALETTE = Palette(
+    ground = Color(0xFFFAFAFA),
+    panel = Color(0xFFFFFFFF),
+    raise = Color(0xFFF4F4F4),
+    edge = Color(0xFFE6E6E6),
+    edgeHi = Color(0xFFCFCFCF),
+    text = Color(0xFF171717),
+    soft = Color(0xFF3F3F3F),
+    muted = Color(0xFF5C5C5C),
+    faint = Color(0xFF6B6B6B),
+    accent = Color(0xFFF5A623),
+    accentInk = Color(0xFF1A1100),
+    sand = Color(0xFF9A5B00),
+    ok = Color(0xFF14804A),
+    warn = Color(0xFF9A5B00),
+    bad = Color(0xFFCF222E),
+)
+
+/**
+ * Color tokens of DESIGN.md ("The Board"): a neutral scale and one accent. [sand] is the accent as text (it stays
+ * readable on both grounds); [accent] is the accent as a fill. Reads [dark], so a change of theme recomposes.
+ */
+object Tokens {
+    var dark: Boolean by mutableStateOf(true)
+
+    private val palette: Palette get() = if (dark) DARK_PALETTE else LIGHT_PALETTE
+
+    val ground: Color get() = palette.ground
+    val panel: Color get() = palette.panel
+    val raise: Color get() = palette.raise
+    val edge: Color get() = palette.edge
+    val edgeHi: Color get() = palette.edgeHi
+    val text: Color get() = palette.text
+    val soft: Color get() = palette.soft
+    val muted: Color get() = palette.muted
+    val faint: Color get() = palette.faint
+    val accent: Color get() = palette.accent
+    val accentInk: Color get() = palette.accentInk
+    val sand: Color get() = palette.sand
+    val ok: Color get() = palette.ok
+    val warn: Color get() = palette.warn
+    val bad: Color get() = palette.bad
+
+    // Stages are told apart by shape and word, not by hue: they share the neutral text colors.
+    val refine: Color get() = palette.muted
+    val develop: Color get() = palette.soft
+    val validate: Color get() = palette.muted
+}
+
+private fun geist(file: String, weight: FontWeight) = Font("fonts/$file", weight)
+
+val sans = FontFamily(
+    geist("Geist-Regular.ttf", FontWeight.Normal),
+    geist("Geist-Medium.ttf", FontWeight.Medium),
+    geist("Geist-SemiBold.ttf", FontWeight.SemiBold),
+    geist("Geist-SemiBold.ttf", FontWeight.Bold),
+)
+val mono = FontFamily(
+    geist("GeistMono-Regular.ttf", FontWeight.Normal),
+    geist("GeistMono-Medium.ttf", FontWeight.Medium),
+    geist("GeistMono-Medium.ttf", FontWeight.SemiBold),
+)
 
 /** Every user-facing text of the app, in pt-BR. */
 object Texts {
@@ -36,6 +135,15 @@ object Texts {
     const val DISCONNECTED = "Desconectado do daemon"
 
     const val BOARD = "Esteira"
+    const val NAV_FACTORY = "Fábrica"
+    const val NAV_SETTINGS = "Configurações"
+    const val SEARCH_HINT = "Buscar card ou comando"
+    const val SEARCH_SHORTCUT = "Ctrl K"
+    const val THEME_SYSTEM = "Tema do sistema"
+    const val THEME_LIGHT = "Tema claro"
+    const val THEME_DARK = "Tema escuro"
+
+    fun waitingForYou(count: Int): String = if (count == 1) "1 espera a sua decisão" else "$count esperam a sua decisão"
     const val COLUMN_MAP = "Mapa das colunas"
     const val WAITS_FOR_YOU = "Aguarda você"
     const val MEDIAN = "mediana"

@@ -1,12 +1,6 @@
 package sfv2.app
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.keyframes
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,10 +10,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -35,21 +29,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val TWO_BY_TWO_BELOW = 1100.dp
-private val ONE_COLUMN_BELOW = 880.dp
-private const val CURSOR_PERIOD_MILLIS = 1060
-
-/** True when the owner asked the desktop for less motion; the phrase cursor then stays still. */
-private val reducedMotion: Boolean = System.getenv("SFV2_REDUCED_MOTION")?.isNotBlank() == true
+private val WRAP_BELOW = 1100.dp
 
 /**
- * The pulse strip: what the factory says, how many sessions are in use and the day ceiling. Everything comes from
- * [view] and is drawn as plain text; card labels are `#n` or 8 hex, never titles.
+ * The factory header: what the factory says and how many cards wait for the owner on the left; the sessions in use,
+ * the day ceiling and the forecast on the right. Everything comes from [view] and is drawn as plain text; card labels
+ * are `#n` or 8 hex, never titles.
  */
 @Composable
-fun PulseStrip(view: PulseView, modifier: Modifier = Modifier) {
+fun PulseStrip(view: PulseView, modifier: Modifier = Modifier, waiting: Int = 0) {
     val dim = if (view.freshness == PulseFreshness.Stale) 0.55f else 1f
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier = modifier.fillMaxWidth().padding(start = 20.dp, top = 16.dp, end = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         view.notice?.let { notice ->
             BasicText(
                 notice,
@@ -58,26 +48,15 @@ fun PulseStrip(view: PulseView, modifier: Modifier = Modifier) {
             )
         }
         BoxWithConstraints(Modifier.fillMaxWidth().alpha(dim)) {
-            val cells: List<@Composable (Modifier) -> Unit> = listOf(
-                { m -> SaysCell(view, m) },
-                { m -> NowCell(view, m) },
-                { m -> CeilingCell(view, m) },
-                { m -> ForecastCellView(view, m) },
-            )
-            when {
-                maxWidth >= TWO_BY_TWO_BELOW -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    cells.forEach { it(Modifier.weight(1f)) }
+            if (maxWidth >= WRAP_BELOW) {
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Says(view, waiting, Modifier.weight(1f))
+                    Gauges(view)
                 }
-                maxWidth >= ONE_COLUMN_BELOW -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    cells.chunked(2).forEach { pair ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            pair.forEach { it(Modifier.weight(1f)) }
-                            if (pair.size == 1) Box(Modifier.weight(1f))
-                        }
-                    }
-                }
-                else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    cells.forEach { it(Modifier.fillMaxWidth()) }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Says(view, waiting, Modifier.fillMaxWidth())
+                    Gauges(view)
                 }
             }
         }
@@ -85,141 +64,84 @@ fun PulseStrip(view: PulseView, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun Cell(title: String, description: String, modifier: Modifier, content: @Composable () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
-    Column(
-        modifier = modifier
-            .background(Tokens.panel, shape)
-            .border(1.dp, Tokens.edge, shape)
-            .padding(12.dp)
-            .semantics { contentDescription = description },
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        BasicText(title, style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.muted))
-        content()
-    }
-}
-
-@Composable
-private fun SaysCell(view: PulseView, modifier: Modifier) {
+private fun Says(view: PulseView, waiting: Int, modifier: Modifier) {
     val description = listOfNotNull(PulseTexts.TITLE, view.stateText, view.phrase).joinToString(", ")
-    Cell(PulseTexts.TITLE, description, modifier) {
+    Column(modifier.semantics { contentDescription = description }, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (view.stateText == null) {
             BasicText(PulseTexts.LOADING, style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.faint))
         } else {
-            BasicText(view.stateText, style = TextStyle(fontFamily = mono, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Tokens.text))
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatusGlyph(if (view.activeCards.isEmpty()) CardGlyph.QUEUED else CardGlyph.RUNNING, size = 18.dp)
                 BasicText(
-                    view.phrase.orEmpty(),
-                    modifier = Modifier.weight(1f, fill = false),
-                    style = TextStyle(fontFamily = mono, fontSize = 13.sp, color = Tokens.soft),
+                    view.stateText,
+                    style = TextStyle(fontFamily = sans, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Tokens.text),
                 )
-                Cursor()
+                if (waiting > 0) {
+                    BasicText(
+                        Texts.waitingForYou(waiting),
+                        style = TextStyle(fontFamily = sans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Tokens.sand),
+                    )
+                }
+            }
+            view.phrase?.let {
+                BasicText(it, maxLines = 1, style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.muted))
             }
         }
     }
 }
 
 @Composable
-private fun Cursor() {
-    val level = if (reducedMotion) {
-        1f
-    } else {
-        val transition = rememberInfiniteTransition(label = "pulse-cursor")
-        val animated by transition.animateFloat(
-            initialValue = 1f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                keyframes {
-                    durationMillis = CURSOR_PERIOD_MILLIS
-                    1f at 0
-                    0f at CURSOR_PERIOD_MILLIS / 2
-                },
-                RepeatMode.Restart,
-            ),
-            label = "pulse-cursor-level",
-        )
-        animated
+private fun Gauges(view: PulseView) {
+    Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
+        Sessions(view)
+        Ceiling(view)
+        view.forecast?.let { forecast ->
+            Column(Modifier.semantics { contentDescription = forecast.description }, verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                BasicText(forecast.headline, style = TextStyle(fontFamily = sans, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Tokens.soft, fontFeatureSettings = "tnum"))
+                forecast.secondary?.let {
+                    BasicText(it, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.faint))
+                }
+            }
+        }
     }
-    Box(Modifier.size(width = 7.dp, height = 14.dp).alpha(level).background(Tokens.text))
 }
 
 @Composable
-private fun NowCell(view: PulseView, modifier: Modifier) {
-    val sessions = view.sessionsText
+private fun Sessions(view: PulseView) {
+    val sessions = view.sessionsText ?: return
     val description = listOfNotNull(PulseTexts.NOW, sessions, view.activeCards.takeIf { it.isNotEmpty() }?.joinToString(" ")).joinToString(", ")
-    Cell(PulseTexts.NOW, description, modifier) {
-        if (sessions == null) {
-            BasicText(PulseTexts.LOADING, style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.faint))
-        } else {
-            BasicText(sessions, style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.text, fontFeatureSettings = "tnum"))
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                view.squares.forEach { used ->
-                    Box(Modifier.size(12.dp).border(1.dp, Tokens.edgeHi).background(if (used) Tokens.text else Color.Transparent))
-                }
-            }
-            if (view.activeCards.isEmpty()) {
-                BasicText(PulseTexts.NO_CARDS, style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.faint))
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    view.activeCards.forEach { label ->
-                        BasicText(
-                            label,
-                            modifier = Modifier.border(1.dp, Tokens.edge, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
-                            style = TextStyle(fontFamily = mono, fontSize = 12.sp, color = Tokens.soft),
-                        )
-                    }
-                }
+    Column(Modifier.semantics { contentDescription = description }, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        BasicText(sessions, style = TextStyle(fontFamily = sans, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Tokens.soft, fontFeatureSettings = "tnum"))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            view.squares.forEach { used ->
+                Box(Modifier.size(width = 20.dp, height = 6.dp).background(if (used) Tokens.text else Tokens.edgeHi, RoundedCornerShape(2.dp)))
             }
         }
     }
 }
 
 @Composable
-private fun CeilingCell(view: PulseView, modifier: Modifier) {
-    val ceiling = view.ceiling
+private fun Ceiling(view: PulseView) {
+    val ceiling = view.ceiling ?: return
     val description = when (ceiling) {
-        null -> PulseTexts.CEILING_TITLE
         is PulseCeiling.Unlimited -> "${PulseTexts.CEILING_TITLE}, ${ceiling.text}"
         is PulseCeiling.Meter -> "${PulseTexts.CEILING_TITLE}, ${PulseTexts.meter(ceiling.percent)}, ${ceiling.spent}"
     }
-    Cell(PulseTexts.CEILING_TITLE, description, modifier) {
+    Column(Modifier.width(150.dp).semantics { contentDescription = description }, verticalArrangement = Arrangement.spacedBy(5.dp)) {
         when (ceiling) {
-            null -> BasicText(PulseTexts.LOADING, style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.faint))
-            is PulseCeiling.Unlimited -> BasicText(ceiling.text, style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.muted))
+            is PulseCeiling.Unlimited ->
+                BasicText(ceiling.text, style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.muted))
             is PulseCeiling.Meter -> {
                 val color = when (ceiling.limitState) {
                     LimitState.Reached -> Tokens.bad
-                    LimitState.Within -> if (ceiling.percent >= WARN_PERCENT) Tokens.warn else Tokens.ok
+                    LimitState.Within -> if (ceiling.percent >= WARN_PERCENT) Tokens.warn else Tokens.text
                     LimitState.NoLimit -> Tokens.muted
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BasicText(ceiling.spent, style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.text, fontFeatureSettings = "tnum"))
-                    BasicText("${ceiling.percent}%", style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = color, fontFeatureSettings = "tnum"))
+                    BasicText(ceiling.spent, style = TextStyle(fontFamily = sans, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Tokens.soft, fontFeatureSettings = "tnum"))
+                    BasicText("${ceiling.percent}%", style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.faint, fontFeatureSettings = "tnum"))
                 }
                 Meter(ceiling.percent / 100f, color, PulseTexts.meter(ceiling.percent))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ForecastCellView(view: PulseView, modifier: Modifier) {
-    val forecast = view.forecast
-    Cell(PulseTexts.FORECAST_TITLE, forecast?.description ?: PulseTexts.FORECAST_TITLE, modifier) {
-        if (forecast == null) {
-            BasicText(PulseTexts.LOADING, style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.faint))
-        } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                val noForecast = forecast.headline == PulseTexts.NO_FORECAST
-                BasicText(
-                    forecast.headline,
-                    style = TextStyle(fontFamily = sans, fontSize = 15.sp, color = if (noForecast) Tokens.muted else Tokens.text, fontFeatureSettings = "tnum"),
-                )
-                BasicText(PulseTexts.FORECAST_BASELINE, style = TextStyle(fontFamily = mono, fontSize = 12.sp, color = Tokens.faint))
-            }
-            forecast.secondary?.let {
-                BasicText(it, style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.muted))
             }
         }
     }
@@ -233,14 +155,14 @@ private fun Meter(fraction: Float, fill: Color, description: String) {
     Box(
         Modifier
             .fillMaxWidth()
-            .height(6.dp)
-            .clip(RoundedCornerShape(3.dp))
+            .height(4.dp)
+            .clip(RoundedCornerShape(2.dp))
             .background(Tokens.edge)
             .semantics { contentDescription = description },
     ) {
         Box(
             Modifier
-                .height(6.dp)
+                .height(4.dp)
                 .layout { measurable, constraints ->
                     val width = (constraints.maxWidth * shown).toInt()
                     val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))

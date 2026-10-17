@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,6 +49,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusRequester
@@ -58,6 +60,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
@@ -90,17 +93,11 @@ import sfv2.core.ColumnTime
 import sfv2.core.Column as BoardColumn
 
 private const val ID_LENGTH = 8
-private const val LANE_GAP = 8
+private const val LANE_GAP = 0
 private val MAP_BOX_MIN_WIDTH = 12.dp
 private val MAP_COUNT_MIN_WIDTH = 24.dp
 private val EDGE_FADE_WIDTH = 24.dp
-private val STAGE_BAR = 3.dp
 
-/**
- * The conveyor belt: ten columns in product order. [view] is null until the first snapshot; [connected] false dims
- * the last known state and says so. With a [controller] the owner moves cards (drag, or `M` on a focused card);
- * without one the belt is read only. Titles are external text: drawn as plain text, never interpreted.
- */
 @Composable
 fun BoardScreen(
     view: BoardView?,
@@ -121,85 +118,97 @@ fun BoardScreen(
     var viewportPx by remember { mutableStateOf(0) }
     var layout by remember { mutableStateOf(ColumnLayoutState()) }
     Column(
-        modifier = Modifier.fillMaxSize().background(Tokens.ground).padding(16.dp).semantics { contentDescription = Texts.BOARD },
+        modifier = Modifier.fillMaxSize().background(Tokens.ground).padding(top = 12.dp).semantics { contentDescription = Texts.BOARD },
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (!connected) StaleBanner()
-        if (connected) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                LayoutControls(layout) { layout = it }
-                if (onReload != null) {
-                    ReloadButton(reloading) {
-                        if (!reloading) {
-                            reloading = true
-                            reloadFailed = false
-                            scope.launch {
-                                try {
-                                    reloadFailed = onReload() == ResyncResult.Failed
-                                } finally {
-                                    reloading = false
+        Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!connected) StaleBanner()
+            if (connected) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    LayoutControls(layout) { layout = it }
+                    if (onReload != null) {
+                        ReloadButton(reloading) {
+                            if (!reloading) {
+                                reloading = true
+                                reloadFailed = false
+                                scope.launch {
+                                    try {
+                                        reloadFailed = onReload() == ResyncResult.Failed
+                                    } finally {
+                                        reloading = false
+                                    }
                                 }
                             }
                         }
                     }
+                    if (onOpenSettings != null) SettingsButton(onOpenSettings)
                 }
-                if (onOpenSettings != null) SettingsButton(onOpenSettings)
+            }
+            if (reloadFailed) {
+                Row(
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    BasicText(Texts.RELOAD_FAILED, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.warn))
+                    BasicText(
+                        Texts.DISMISS,
+                        modifier = Modifier.clickable { reloadFailed = false },
+                        style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.soft),
+                    )
+                }
+            }
+            move.status?.let { StatusLine(it) }
+            move.notice?.let { notice -> NoticeLine(notice) { controller?.dismissNotice() } }
+            val emptyBoard = view?.board
+            if (emptyBoard != null && emptyBoard.cards.isEmpty()) {
+                BasicText(Texts.EMPTY_BOARD, style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.soft))
+            }
+            val pending = move.held
+            if (controller != null && pending != null) {
+                if (move.notePending) {
+                    NoteBox(
+                        onSend = { note -> scope.launch { controller.submit(note) } },
+                        onCancel = controller::cancel,
+                    )
+                } else {
+                    DestinationChooser(pending, move, controller, scope)
+                }
             }
         }
-        if (reloadFailed) {
-            Row(
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                BasicText(Texts.RELOAD_FAILED, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.warn))
-                BasicText(
-                    Texts.DISMISS,
-                    modifier = Modifier.clickable { reloadFailed = false },
-                    style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.soft),
-                )
-            }
-        }
-        move.status?.let { StatusLine(it) }
-        move.notice?.let { notice -> NoticeLine(notice) { controller?.dismissNotice() } }
         val board = view?.board
-        if (board != null && board.cards.isEmpty()) {
-            BasicText(Texts.EMPTY_BOARD, style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.soft))
-        }
         val held = move.held
-        if (controller != null && held != null) {
-            if (move.notePending) {
-                NoteBox(
-                    onSend = { note -> scope.launch { controller.submit(note) } },
-                    onCancel = controller::cancel,
-                )
-            } else {
-                DestinationChooser(held, move, controller, scope)
-            }
-        }
         val density = LocalDensity.current.density
         val viewportDp = (viewportPx / density).roundToInt()
         val counts = BoardColumn.entries.associateWith { board?.cardsIn(it)?.size ?: 1 }
         val widths = columnWidths(layout, counts, viewportDp, LANE_GAP)
         Column(modifier = Modifier.fillMaxSize().alpha(if (connected) 1f else 0.55f)) {
-            ColumnMap(
-                map = boardMap(
-                    board ?: Board(emptyList(), null),
-                    widths,
-                    LANE_GAP,
-                    viewportDp,
-                    (scrollState.value / density).roundToInt(),
-                ),
-                enabled = connected,
-                onGo = { column ->
-                    val target = scrollTarget(column, widths, LANE_GAP, viewportDp)
-                    scope.launch { scrollState.scrollTo((target * density).roundToInt()) }
-                },
-            )
-            Box(modifier = Modifier.fillMaxSize().onSizeChanged { viewportPx = it.width }) {
+            Box(Modifier.padding(horizontal = 20.dp)) {
+                ColumnStrip(
+                    map = boardMap(
+                        board ?: Board(emptyList(), null),
+                        widths,
+                        LANE_GAP,
+                        viewportDp,
+                        (scrollState.value / density).roundToInt(),
+                    ),
+                    enabled = connected,
+                    onGo = { column ->
+                        val target = scrollTarget(column, widths, LANE_GAP, viewportDp)
+                        scope.launch { scrollState.scrollTo((target * density).roundToInt()) }
+                    },
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .drawBehind { drawLine(Tokens.edge, Offset(0f, 0.5f), Offset(size.width, 0.5f), 1.dp.toPx()) }
+                    .onSizeChanged { viewportPx = it.width },
+            ) {
                 Row(
                     modifier = Modifier.fillMaxSize().horizontalScroll(scrollState),
                     horizontalArrangement = Arrangement.spacedBy(LANE_GAP.dp),
@@ -230,58 +239,80 @@ fun BoardScreen(
     }
 }
 
-/** The map strip above the board: a box per column, sized like the column, and the outline of the visible window. */
+/** The short name of a column in the strip; the full name stays in the lane header and in the description. */
+internal fun stripLabel(column: BoardColumn): String =
+    when (column) {
+        BoardColumn.READY_FOR_REFINEMENT, BoardColumn.READY_FOR_DEV -> "Ready"
+        BoardColumn.READY_FOR_PROD -> "Prod"
+        else -> column.displayName
+    }
+
+/** One cell per column with its count and name; the cells in view carry a line, and a click scrolls to the column. */
 @Composable
-private fun ColumnMap(map: BoardMap, enabled: Boolean, onGo: (BoardColumn) -> Unit) {
-    BoxWithConstraints(
+private fun ColumnStrip(map: BoardMap, enabled: Boolean, onGo: (BoardColumn) -> Unit) {
+    val shape = RoundedCornerShape(8.dp)
+    val total = map.boxes.sumOf { it.share.toDouble() }.toFloat().coerceAtLeast(Float.MIN_VALUE)
+    var cursor = 0f
+    val inView = map.boxes.map { box ->
+        val from = cursor / total
+        cursor += box.share
+        val to = cursor / total
+        from < map.viewStart + map.viewShare && to > map.viewStart
+    }
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(40.dp)
+            .height(64.dp)
+            .clip(shape)
+            .background(Tokens.panel, shape)
+            .border(1.dp, Tokens.edge, shape)
             .semantics { contentDescription = Texts.COLUMN_MAP },
     ) {
-        Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            map.boxes.forEach { box ->
-                MapBoxItem(box, enabled, Modifier.weight(box.share.coerceAtLeast(Float.MIN_VALUE)).fillMaxHeight()) { onGo(box.column) }
-            }
+        map.boxes.forEachIndexed { index, box ->
+            StripCell(box, inView[index], divider = index > 0, enabled = enabled, modifier = Modifier.weight(1f).fillMaxHeight()) { onGo(box.column) }
         }
-        Box(
-            Modifier
-                .offset(x = maxWidth * map.viewStart)
-                .width(maxWidth * map.viewShare)
-                .fillMaxHeight()
-                .border(2.dp, Tokens.edgeHi),
-        )
     }
 }
 
 @Composable
-private fun MapBoxItem(box: MapBox, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(6.dp)
+private fun StripCell(box: MapBox, inView: Boolean, divider: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val waiting = isWaitingForOwner(box.column) && box.count > 0
     var focused by remember { mutableStateOf(false) }
-    BoxWithConstraints(
+    Box(
         modifier = modifier
-            .widthIn(min = MAP_BOX_MIN_WIDTH)
-            .background(Tokens.panel, shape)
-            .border(if (focused) 2.dp else 1.dp, if (focused || waiting) Tokens.sand else Tokens.edge, shape)
+            .drawBehind {
+                if (divider) drawLine(Tokens.edge, Offset(0.5f, 0f), Offset(0.5f, size.height), 1.dp.toPx())
+                if (inView) drawLine(Tokens.text.copy(alpha = 0.55f), Offset(0f, size.height - 1.dp.toPx()), Offset(size.width, size.height - 1.dp.toPx()), 2.dp.toPx())
+                if (focused) drawRect(Tokens.accent, style = Stroke(2.dp.toPx()))
+            }
             .onFocusChanged { focused = it.isFocused }
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .clearAndSetSemantics { contentDescription = Texts.goToColumn(box.column, box.count) },
-        contentAlignment = Alignment.Center,
+            .clearAndSetSemantics { contentDescription = Texts.goToColumn(box.column, box.count) }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        if (maxWidth >= MAP_COUNT_MIN_WIDTH) {
+        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
             BasicText(
                 box.count.toString(),
                 style = TextStyle(
                     fontFamily = sans,
-                    fontSize = 13.sp,
-                    color = if (waiting) Tokens.sand else Tokens.muted,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (box.count == 0) Tokens.faint else Tokens.text,
                     fontFeatureSettings = "tnum",
                 ),
             )
+            BasicText(
+                stripLabel(box.column),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = TextStyle(fontFamily = sans, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = if (waiting) Tokens.sand else Tokens.muted),
+            )
         }
+        if (waiting) Box(Modifier.align(Alignment.TopEnd).size(8.dp).background(Tokens.accent, CircleShape))
     }
 }
+
+
 
 /** Gradient strips over the board edges, only on the side that has more to see; they never take clicks. */
 @Composable
@@ -301,14 +332,14 @@ private fun StaleBanner() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Tokens.warn, RoundedCornerShape(12.dp))
+            .border(1.dp, Tokens.warn, RoundedCornerShape(8.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .semantics { liveRegion = LiveRegionMode.Polite },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(Modifier.size(8.dp).background(Tokens.warn, CircleShape))
-        BasicText(Texts.STALE_BOARD, style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.text))
+        BasicText(Texts.STALE_BOARD, style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.text))
     }
 }
 
@@ -323,15 +354,7 @@ private fun StatusLine(text: String) {
 
 @Composable
 private fun ReloadButton(reloading: Boolean, onClick: () -> Unit) {
-    BasicText(
-        if (reloading) Texts.RELOADING else Texts.RELOAD,
-        modifier = Modifier
-            .alpha(if (reloading) 0.6f else 1f)
-            .border(1.dp, Tokens.edge, RoundedCornerShape(8.dp))
-            .clickable(enabled = !reloading, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.text),
-    )
+    IconButton(AppIcon.REFRESH, if (reloading) Texts.RELOADING else Texts.RELOAD, enabled = !reloading, onClick = onClick)
 }
 
 @Composable
@@ -451,7 +474,6 @@ private fun NoteBox(onSend: (String) -> Unit, onCancel: () -> Unit) {
     }
 }
 
-/** [cards] is null while the first snapshot has not arrived; [time] is null when the column has no statistic. */
 @Composable
 private fun Lane(
     width: Int,
@@ -470,13 +492,10 @@ private fun Lane(
     onOpenCard: (String) -> Unit,
 ) {
     val waiting = isWaitingForOwner(column) && !cards.isNullOrEmpty()
-    val accent = if (waiting) Tokens.sand else Tokens.text
-    val shape = RoundedCornerShape(12.dp)
-    val hue = stageHue(column)
     val count = cards?.size
     val timeLabel = time?.let(ColumnTimeLabel::of)
     if (width == ColumnLayoutState.COLLAPSED_WIDTH && count == 0 && column !in layout.restored) {
-        CollapsedLane(column, hue, laneBounds) { onLayout(layout.restore(column)) }
+        CollapsedLane(column, laneBounds) { onLayout(layout.restore(column)) }
         return
     }
     val chips = layout.density == BoardDensity.CHIPS
@@ -486,42 +505,38 @@ private fun Lane(
             .fillMaxHeight()
             .alpha(if (dimmed) 0.45f else 1f)
             .onGloballyPositioned { laneBounds[column] = it.boundsInRoot() }
-            .background(Tokens.panel, shape)
-            .border(if (accepts) 2.dp else 1.dp, if (accepts) Tokens.edgeHi else if (waiting) Tokens.sand else Tokens.edge, shape)
-            .drawBehind {
-                if (hue != StageHue.NEUTRAL) drawRect(hueColor(hue), size = Size(size.width, STAGE_BAR.toPx()))
-            }
-            .padding(12.dp)
+            .background(if (accepts) Tokens.raise else Color.Transparent)
+            .drawBehind { drawLine(Tokens.edge, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1.dp.toPx()) }
             .semantics { contentDescription = laneDescription(column, count ?: 0, waiting, timeLabel) },
-        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp).padding(start = 14.dp),
         ) {
             BasicText(
                 column.displayName,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
-                style = TextStyle(fontFamily = sans, fontSize = if (chips) 13.sp else 17.sp, fontWeight = FontWeight.SemiBold, color = accent),
+                style = TextStyle(fontFamily = sans, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (waiting) Tokens.sand else Tokens.muted),
             )
             BasicText(
                 count?.toString() ?: "–",
-                style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.muted, fontFeatureSettings = "tnum"),
+                style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.faint, fontFeatureSettings = "tnum"),
             )
             ResizeHandle(column, width, onLayout, layout)
         }
-        if (!chips) timeLabel?.let { Meta(it, Tokens.muted) }
-        if (waiting && !chips) BasicText(Texts.WAITS_FOR_YOU, style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.sand))
+        if (!chips) {
+            timeLabel?.let { Meta(it, Tokens.faint, Modifier.padding(start = 14.dp, bottom = 6.dp)) }
+        }
         Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 10.dp, end = 10.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             when {
                 cards == null -> Meta(Texts.LOADING_BOARD, Tokens.faint)
-                cards.isEmpty() -> Meta(Texts.EMPTY_COLUMN, Tokens.faint)
+                cards.isEmpty() -> Meta(Texts.EMPTY_COLUMN, Tokens.faint, Modifier.padding(start = 4.dp))
                 else -> cards.forEach {
                     if (chips) {
                         Chip(it, it.id == openCardId, it.id == focusReturnCardId, onOpenCard)
@@ -534,20 +549,18 @@ private fun Lane(
     }
 }
 
-/** An empty column folded to a strip: count on top, name upright-rotated below; click or Enter/Space restores it. */
+/** An empty column folded to a strip: count on top, name rotated below; click or Enter/Space restores it. */
 @Composable
-private fun CollapsedLane(column: BoardColumn, hue: StageHue, laneBounds: MutableMap<BoardColumn, Rect>, onRestore: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
+private fun CollapsedLane(column: BoardColumn, laneBounds: MutableMap<BoardColumn, Rect>, onRestore: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .width(ColumnLayoutState.COLLAPSED_WIDTH.dp)
             .fillMaxHeight()
             .onGloballyPositioned { laneBounds[column] = it.boundsInRoot() }
-            .background(Tokens.panel, shape)
-            .border(if (focused) 2.dp else 1.dp, if (focused) Tokens.sand else Tokens.edge, shape)
             .drawBehind {
-                if (hue != StageHue.NEUTRAL) drawRect(hueColor(hue), size = Size(size.width, STAGE_BAR.toPx()))
+                drawLine(Tokens.edge, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1.dp.toPx())
+                if (focused) drawRect(Tokens.accent, style = Stroke(2.dp.toPx()))
             }
             .onFocusChanged { focused = it.isFocused }
             .clickable(role = Role.Button, onClick = onRestore)
@@ -556,12 +569,12 @@ private fun CollapsedLane(column: BoardColumn, hue: StageHue, laneBounds: Mutabl
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        BasicText("0", style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.muted, fontFeatureSettings = "tnum"))
+        BasicText("0", style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.faint, fontFeatureSettings = "tnum"))
         BasicText(
             column.displayName,
             maxLines = 1,
             modifier = Modifier.vertical(),
-            style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.soft),
+            style = TextStyle(fontFamily = sans, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Tokens.faint),
         )
     }
 }
@@ -575,27 +588,30 @@ private fun Modifier.vertical(): Modifier =
         }
     }
 
-/** A chip: only the card number, in the stage color; the title lives in the accessibility description. */
 @Composable
 private fun Chip(card: BoardCard, open: Boolean, takesFocus: Boolean, onOpenCard: (String) -> Unit) {
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(6.dp)
     var focused by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(takesFocus) { if (takesFocus) focus.requestFocus() }
-    val color = hueColor(stageHue(card.column))
+    val waiting = isWaitingForOwner(card.column)
     BasicText(
         card.id.take(ID_LENGTH),
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (open) Tokens.raise else Tokens.ground, shape)
-            .border(if (focused || open) 2.dp else 1.dp, if (focused) Tokens.edgeHi else if (open) color else Tokens.edge, shape)
+            .background(if (open) Tokens.raise else Tokens.panel, shape)
+            .border(
+                if (focused) 2.dp else 1.dp,
+                if (focused) Tokens.accent else if (open) Tokens.text else if (waiting) Tokens.sand.copy(alpha = 0.6f) else Tokens.edge,
+                shape,
+            )
             .semantics { contentDescription = CardFace.of(card, Clock.systemUTC()).description }
             .focusRequester(focus)
             .onFocusChanged { focused = it.isFocused }
             .clickable(role = Role.Button) { onOpenCard(card.id) }
             .padding(horizontal = 8.dp, vertical = 6.dp),
         maxLines = 1,
-        style = TextStyle(fontFamily = mono, fontSize = 12.sp, color = color),
+        style = TextStyle(fontFamily = mono, fontSize = 12.sp, color = if (waiting) Tokens.sand else Tokens.muted),
     )
 }
 
@@ -611,7 +627,7 @@ private fun ResizeHandle(column: BoardColumn, width: Int, onLayout: (ColumnLayou
     Box(
         modifier = Modifier
             .size(24.dp)
-            .border(if (focused) 2.dp else 0.dp, if (focused) Tokens.sand else Color.Transparent, RoundedCornerShape(6.dp))
+            .border(if (focused) 2.dp else 0.dp, if (focused) Tokens.accent else Color.Transparent, RoundedCornerShape(6.dp))
             .onPointerEvent(PointerEventType.Enter) { hovered = true }
             .onPointerEvent(PointerEventType.Exit) { hovered = false }
             .onFocusChanged { focused = it.isFocused }
@@ -643,35 +659,24 @@ private fun ResizeHandle(column: BoardColumn, width: Int, onLayout: (ColumnLayou
             },
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(width = 4.dp, height = 16.dp).background(if (hovered || focused) Tokens.soft else Tokens.faint, RoundedCornerShape(2.dp)))
+        Box(Modifier.size(width = 2.dp, height = 14.dp).background(if (hovered || focused) Tokens.soft else Tokens.edgeHi, RoundedCornerShape(1.dp)))
     }
 }
 
-/** Fit to window, Equalize and the density switch, next to Reload and Settings. */
+/** Fit to window, Equalize and the density switch. */
 @Composable
 private fun LayoutControls(layout: ColumnLayoutState, onLayout: (ColumnLayoutState) -> Unit) {
-    ControlButton(Texts.FIT_TO_WINDOW, selected = layout.fit) { onLayout(layout.withFit(!layout.fit)) }
-    ControlButton(Texts.EQUALIZE, selected = false) { onLayout(layout.equalize()) }
-    ControlButton(Texts.DENSITY_CARDS, selected = layout.density == BoardDensity.CARDS) { onLayout(layout.withDensity(BoardDensity.CARDS)) }
-    ControlButton(Texts.DENSITY_CHIPS, selected = layout.density == BoardDensity.CHIPS) { onLayout(layout.withDensity(BoardDensity.CHIPS)) }
+    LabeledSwitch(Texts.FIT_TO_WINDOW, layout.fit) { onLayout(layout.withFit(it)) }
+    ActionButton(Texts.EQUALIZE, AppIcon.EQUALIZE) { onLayout(layout.equalize()) }
+    SegmentedControl(
+        listOf(Texts.DENSITY_CARDS, Texts.DENSITY_CHIPS),
+        selected = if (layout.density == BoardDensity.CARDS) 0 else 1,
+    ) { onLayout(layout.withDensity(if (it == 0) BoardDensity.CARDS else BoardDensity.CHIPS)) }
 }
 
 @Composable
-private fun ControlButton(label: String, selected: Boolean, onClick: () -> Unit) {
-    BasicText(
-        label,
-        modifier = Modifier
-            .heightIn(min = 24.dp)
-            .border(if (selected) 2.dp else 1.dp, if (selected) Tokens.edgeHi else Tokens.edge, RoundedCornerShape(8.dp))
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.text),
-    )
-}
-
-@Composable
-private fun Meta(text: String, color: Color) {
-    BasicText(text, style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = color))
+private fun Meta(text: String, color: Color, modifier: Modifier = Modifier) {
+    BasicText(text, modifier = modifier, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = color))
 }
 
 @Composable
@@ -695,18 +700,18 @@ private fun Card(
     val description = face.description + (if (movable) ", pode mover" else "") + (if (open) ", ${Texts.openCardHint()}" else "")
     val focus = remember { FocusRequester() }
     LaunchedEffect(takesFocus) { if (takesFocus) focus.requestFocus() }
-    val openColor = hueColor(stageHue(card.column))
-    Row(
+    val glyph = glyphOf(card.column, card.blocked)
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .onGloballyPositioned { origin = it.boundsInRoot().topLeft }
-            .background(if (open) Tokens.raise else Tokens.ground, shape)
+            .background(if (open) Tokens.raise else Tokens.panel, shape)
             .border(
-                if (focused || open) 2.dp else 1.dp,
-                if (focused) Tokens.edgeHi else if (open) openColor else Tokens.edge,
+                if (focused) 2.dp else 1.dp,
+                if (focused) Tokens.accent else if (open) Tokens.text else if (waiting) Tokens.sand.copy(alpha = 0.6f) else Tokens.edge,
                 shape,
             )
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .padding(horizontal = 12.dp, vertical = 11.dp)
             .semantics { contentDescription = description }
             .focusRequester(focus)
             .onFocusChanged { focused = it.isFocused }
@@ -742,26 +747,23 @@ private fun Card(
                     },
                 )
             },
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BasicText(shortId, style = TextStyle(fontFamily = mono, fontSize = 12.sp, color = hueColor(stageHue(card.column))))
-                face.blockedLabel?.let { BasicText(it, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.bad)) }
-            }
-            BasicText(
-                card.title,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Tokens.soft),
-            )
-            val meta = listOfNotNull(face.stage, face.age, face.cost, face.costNote).joinToString(" · ")
-            BasicText(
-                meta,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.muted),
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            StatusGlyph(glyph)
+            BasicText(shortId, style = TextStyle(fontFamily = mono, fontSize = 12.sp, color = Tokens.faint))
+            face.blockedLabel?.let { BasicText(it, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.bad)) }
+        }
+        BasicText(
+            card.title,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            style = TextStyle(fontFamily = sans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Tokens.text, lineHeight = 18.sp),
+        )
+        val costKnown = card.cost?.let { it.costUsd != null && (it.status == CostStatus.KNOWN || it.status == CostStatus.PARTIAL) } == true
+        val meta = listOfNotNull(face.age, face.cost.takeIf { costKnown }, face.costNote.takeIf { costKnown }).joinToString(" · ")
+        if (meta.isNotEmpty()) {
+            BasicText(meta, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.muted, fontFeatureSettings = "tnum"))
         }
     }
 }

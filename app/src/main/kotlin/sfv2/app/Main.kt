@@ -1,6 +1,7 @@
 package sfv2.app
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -218,6 +219,7 @@ fun main() {
         var panel by remember { mutableStateOf(SidePanelState()) }
         val escapeClaim = remember { EscapeClaim() }
         var palette by remember { mutableStateOf(PaletteState()) }
+        var themeChoice by remember { mutableStateOf(ThemePreference.load()) }
         val paletteList = remember(view, palette.query) {
             paletteEntries(view?.board?.cards.orEmpty(), PaletteView.entries, palette.query)
         }
@@ -282,7 +284,7 @@ fun main() {
         Window(
             onCloseRequest = ::exitApplication,
             title = "sfv2",
-            state = rememberWindowState(size = DpSize(960.dp, 640.dp), position = WindowPosition.PlatformDefault),
+            state = rememberWindowState(size = DpSize(1280.dp, 800.dp), position = WindowPosition.PlatformDefault),
             onPreviewKeyEvent = ::onPaletteKey,
         ) {
             window.minimumSize = Dimension(360, 240)
@@ -300,11 +302,27 @@ fun main() {
             }
             val openSettings = settingsClient?.let { { showSettings = true } }
             val feedAvailable = feed != null && connected
+            val systemDark = isSystemInDarkTheme()
+            Tokens.dark = when (themeChoice) {
+                ThemeChoice.SYSTEM -> systemDark
+                ThemeChoice.LIGHT -> false
+                ThemeChoice.DARK -> true
+            }
+            fun selectSection(section: AppSection) {
+                showFeed = section == AppSection.FEED
+            }
+            fun openPalette() {
+                palette = palette.toggle()
+            }
+            fun chooseTheme(choice: ThemeChoice) {
+                themeChoice = choice
+                ThemePreference.save(choice)
+            }
             CompositionLocalProvider(LocalEscapeClaim provides escapeClaim) {
             Box(Modifier.fillMaxSize()) {
                 when {
                     showSettings && settingsClient != null -> SettingsScreen(settingsClient, onBack = { showSettings = false })
-                    feed != null && feedAvailable && showFeed -> ScreenWithTabs(showFeed = true, onSelect = { showFeed = it }) {
+                    feed != null && feedAvailable && showFeed -> ScreenWithTabs(AppSection.FEED, ::selectSection, feedAvailable, openSettings, ::openPalette, themeChoice, ::chooseTheme) {
                         val feedState by feed.client.state.collectAsState()
                         val scope = rememberCoroutineScope()
                         FeedScreen(
@@ -315,48 +333,26 @@ fun main() {
                         )
                     }
                     // The belt stays on screen (dimmed) once it has been drawn; before that, the connection screen.
-                    view != null -> ScreenWithTabs(showFeed = false, onSelect = { showFeed = it }, tabs = feedAvailable) {
-                        Column(Modifier.fillMaxSize()) {
-                            PulseStrip(pulseView, Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp))
-                            view?.let { shown ->
-                                TimeSplit.of(shown.columnTimes)?.let { split ->
-                                    FlowBar(split, dimmed = !shown.live, modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp))
-                                }
-                            }
-                            BoxWithConstraints(Modifier.weight(1f)) {
-                                val openId = panel.cardId
-                                val panelWidth = minOf(panel.width.dp, maxWidth)
-                                val boardScreen: @Composable () -> Unit = {
-                                    BoardScreen(
-                                        view,
-                                        connected = connected,
-                                        controller = owner,
-                                        onOpenSettings = openSettings,
-                                        onReload = board?.let { monitor -> monitor::resync },
-                                        openCardId = openId,
-                                        focusReturnCardId = panel.focusReturnCardId,
-                                        onOpenCard = { panel = panel.open(it) },
-                                    )
-                                }
-                                val sidePanel: @Composable () -> Unit = {
-                                    if (openId != null) {
-                                        OpenCard(openId, cardSource, ownerCommands, closureCommands, panel, panelWidth) { change ->
-                                            panel = change(panel)
-                                        }
+                    view != null -> ScreenWithTabs(AppSection.BOARD, ::selectSection, feedAvailable, openSettings, ::openPalette, themeChoice, ::chooseTheme) {
+                        val openId = panel.cardId
+                        FactoryScreen(
+                            view = view,
+                            pulse = pulseView,
+                            connected = connected,
+                            controller = owner,
+                            onReload = board?.let { monitor -> monitor::resync },
+                            openCardId = openId,
+                            focusReturnCardId = panel.focusReturnCardId,
+                            onOpenCard = { panel = panel.open(it) },
+                            panelWidth = panel.width.dp,
+                            sidePanel = { width ->
+                                if (openId != null) {
+                                    OpenCard(openId, cardSource, ownerCommands, closureCommands, panel, width) { change ->
+                                        panel = change(panel)
                                     }
                                 }
-                                when (panelPlacement(maxWidth.value.toInt())) {
-                                    PanelPlacement.SIDE_BY_SIDE -> Row(Modifier.fillMaxSize()) {
-                                        Box(Modifier.weight(1f)) { boardScreen() }
-                                        sidePanel()
-                                    }
-                                    PanelPlacement.OVERLAY -> Box(Modifier.fillMaxSize()) {
-                                        boardScreen()
-                                        Box(Modifier.align(Alignment.CenterEnd)) { sidePanel() }
-                                    }
-                                }
-                            }
-                        }
+                            },
+                        )
                     }
                     else -> ConnectionScreen(state, onOpenSettings = openSettings)
                 }
@@ -379,34 +375,20 @@ fun main() {
     }
 }
 
-/** A minimal switch between the belt and the day feed, above the active screen. */
+/** The app bar above the active screen. */
 @Composable
 private fun ScreenWithTabs(
-    showFeed: Boolean,
-    onSelect: (Boolean) -> Unit,
-    tabs: Boolean = true,
+    section: AppSection,
+    onSelect: (AppSection) -> Unit,
+    feedAvailable: Boolean,
+    onSettings: (() -> Unit)?,
+    onSearch: () -> Unit,
+    theme: ThemeChoice,
+    onTheme: (ThemeChoice) -> Unit,
     content: @Composable () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().background(Tokens.ground)) {
-        if (tabs) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Tab(Texts.BOARD, selected = !showFeed) { onSelect(false) }
-                Tab(Texts.FEED_TITLE, selected = showFeed) { onSelect(true) }
-            }
-        }
+        AppBar(section, feedAvailable, onSelect, onSettings, onSearch, theme, onTheme)
         Box(Modifier.fillMaxSize()) { content() }
     }
-}
-
-@Composable
-private fun Tab(label: String, selected: Boolean, onClick: () -> Unit) {
-    BasicText(
-        label,
-        modifier = Modifier.clickable(onClick = onClick).padding(end = 16.dp),
-        style = TextStyle(
-            color = if (selected) Tokens.text else Tokens.muted,
-            fontSize = 13.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-        ),
-    )
 }
