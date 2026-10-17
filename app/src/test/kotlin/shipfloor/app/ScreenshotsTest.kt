@@ -32,12 +32,13 @@ object ScreenFixtures {
         cost = cost?.let { BoardCost(CostStatus.KNOWN, BigDecimal(it)) },
     )
 
-    fun board(): Board = Board(
+    fun board(inbox: Int = 4): Board = Board(
         cards = listOf(
             cardIn(BoardColumn.INBOX, "ac51d58a-0000", "Virada: a shipfloor assume o próprio repositório", 655),
             cardIn(BoardColumn.INBOX, "cf23240a-0000", "Decisão sobre o cartum", 655),
             cardIn(BoardColumn.INBOX, "a1e8d774-0000", "Serviço no macOS e no Windows", 655),
             cardIn(BoardColumn.INBOX, "0e3864ff-0000", "CI e pacotes para macOS e Windows", 655),
+        ) + (5..inbox).map { cardIn(BoardColumn.INBOX, "b%07x-0000".format(it), "Card do Inbox número $it", 600L - it) } + listOf(
             cardIn(BoardColumn.READY_FOR_REFINEMENT, "3be90c12-0000", "Exportar eventos do dia em CSV", 25),
             cardIn(BoardColumn.REFINEMENT, "91d2e7a0-0000", "Filtro por projeto no Feed do dia", 12, "0.18"),
             cardIn(BoardColumn.SPEC_REVIEW, "7c113339-0000", "Atualizador automático", 283, "0.21"),
@@ -49,7 +50,7 @@ object ScreenFixtures {
         lastSeq = 1,
     )
 
-    fun view(): BoardView = BoardView(board(), live = true)
+    fun view(inbox: Int = 4): BoardView = BoardView(board(inbox), live = true)
 
     fun detail(): CardDetail = CardDetail(
         id = "7c113339-0000",
@@ -113,11 +114,14 @@ class ScreenshotsTest {
             val file = out.resolve("factory-$name.png")
             render(1440, 900, file) { FactoryContent(dark) }
             assertThat(Files.size(file)).isGreaterThan(10_000L)
-            val panel = out.resolve("panel-$name.png")
-            render(1440, 900, panel) { FactoryContent(dark, openCard = true) }
-            assertThat(Files.size(panel)).isGreaterThan(10_000L)
+            val full = out.resolve("full-inbox-$name.png")
+            render(1440, 900, full) { FactoryContent(dark, inbox = 27) }
+            assertThat(Files.size(full)).isGreaterThan(10_000L)
+            val modals = out.resolve("modals-$name.png")
+            render(1440, 900, modals) { FactoryContent(dark, inbox = 27, modals = true) }
+            assertThat(Files.size(modals)).isGreaterThan(10_000L)
             val chips = out.resolve("chips-$name.png")
-            render(1440, 900, chips) { FactoryContent(dark, chips = true) }
+            render(1440, 900, chips) { FactoryContent(dark, chips = true, inbox = 27) }
             assertThat(Files.size(chips)).isGreaterThan(10_000L)
             val narrow = out.resolve("factory-$name-1000.png")
             render(1000, 700, narrow) { FactoryContent(dark) }
@@ -154,32 +158,31 @@ class ScreenshotsTest {
     }
 
     @Composable
-    private fun FactoryContent(dark: Boolean, openCard: Boolean = false, chips: Boolean = false) {
+    private fun FactoryContent(dark: Boolean, chips: Boolean = false, inbox: Int = 4, modals: Boolean = false) {
         Tokens.dark = dark
-        Column(Modifier.fillMaxSize().background(Tokens.ground)) {
-            AppBar(AppSection.BOARD, feedAvailable = true, onSelect = {}, onSettings = {}, onSearch = {}, theme = ThemeChoice.SYSTEM, onTheme = {})
-            Box(Modifier.weight(1f)) {
-                FactoryScreen(
-                    view = ScreenFixtures.view(),
-                    pulse = ScreenFixtures.pulse(),
-                    connected = true,
-                    initialDensity = if (chips) BoardDensity.CHIPS else BoardDensity.CARDS,
-                    openCardId = if (openCard) "7c113339-0000" else null,
-                    panelWidth = 520.dp,
-                    sidePanel = { width ->
-                        if (openCard) {
-                            CardSidePanel(
-                                "7c113339-0000",
-                                CardDetailState.Loaded(ScreenFixtures.detail()),
-                                tab = PanelTab.SUMMARY,
-                                width = width,
-                                onTab = {},
-                                onResize = {},
-                                onClose = {},
-                                specReview = SpecReviewFixtures.controller().controller,
-                            )
-                        }
-                    },
+        val density = if (chips) BoardDensity.CHIPS else BoardDensity.CARDS
+        Box(Modifier.fillMaxSize().background(Tokens.ground)) {
+            Column(Modifier.fillMaxSize()) {
+                AppBar(AppSection.BOARD, feedAvailable = true, onSelect = {}, onSettings = {}, onSearch = {}, theme = ThemeChoice.SYSTEM, onTheme = {})
+                Box(Modifier.weight(1f)) {
+                    FactoryScreen(view = ScreenFixtures.view(inbox), pulse = ScreenFixtures.pulse(), connected = true, density = density)
+                }
+            }
+            if (modals) {
+                ColumnListModal(
+                    BoardColumn.INBOX,
+                    ScreenFixtures.board(inbox).cardsIn(BoardColumn.INBOX),
+                    density,
+                    onOpenCard = {},
+                    onClose = {},
+                )
+                CardDetailModal(
+                    "7c113339-0000",
+                    CardDetailState.Loaded(ScreenFixtures.detail()),
+                    boardCard = ScreenFixtures.board(inbox).cards.first { it.id.startsWith("7c11") },
+                    controller = null,
+                    onClose = {},
+                    specReview = SpecReviewFixtures.controller().controller,
                 )
             }
         }

@@ -60,6 +60,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.freedesktop.dbus.connections.impl.DBusConnectionBuilder
+import shipfloor.core.Column as BoardColumn
 
 private const val SOCKET_RELATIVE_PATH = "shipfloor/daemon.sock"
 private const val OWNER_TOKEN_FILE = "owner.token"
@@ -136,16 +137,16 @@ private fun openNoticePorts(requests: MutableSharedFlow<WindowRequest>): NoticeP
     return NoticePorts(tray, notifier)
 }
 
-/** [commands] and [closure] are null without a daemon; the card panel then shows no owner action. */
+/** [commands] and [closure] are null without a daemon; the card modal then shows no owner action. */
 @Composable
 private fun OpenCard(
     cardId: String,
     source: CardDetailSource?,
     commands: OwnerCommands?,
     closure: ClosureCommands?,
-    panel: SidePanelState,
-    width: Dp,
-    update: ((SidePanelState) -> SidePanelState) -> Unit,
+    boardCard: BoardCard?,
+    owner: OwnerMoveController?,
+    onClose: () -> Unit,
 ) {
     val model = remember(cardId) {
         CardDetailModel(cardId, source ?: CardDetailSource { throw IOException("no runtime dir") })
@@ -162,14 +163,12 @@ private fun OpenCard(
             withContext(Dispatchers.IO) { model.refresh() }
         }
     }
-    CardSidePanel(
+    CardDetailModal(
         cardId,
         state,
-        tab = panel.tab,
-        width = width,
-        onTab = { tab -> update { it.selectTab(tab) } },
-        onResize = { px -> update { it.resize(px) } },
-        onClose = { update { it.close() } },
+        boardCard = boardCard,
+        controller = owner,
+        onClose = onClose,
         specReview = specReview,
         closure = controller,
     )
@@ -249,7 +248,9 @@ fun main() {
         val pulseView by (pulse?.view ?: noPulse).collectAsState()
         val connected = state == ConnectionState.Connected
         var showFeed by remember { mutableStateOf(false) }
-        var panel by remember { mutableStateOf(SidePanelState()) }
+        var detail by remember { mutableStateOf(DetailModalState()) }
+        var listColumn by remember { mutableStateOf<BoardColumn?>(null) }
+        var density by remember { mutableStateOf(BoardDensity.CARDS) }
         val escapeClaim = remember { EscapeClaim() }
         var palette by remember { mutableStateOf(PaletteState()) }
         var themeChoice by remember { mutableStateOf(ThemePreference.load()) }
@@ -259,9 +260,10 @@ fun main() {
 
         fun choose(entry: PaletteEntry?) {
             when (entry) {
-                is PaletteEntry.Card -> panel = panel.open(entry.card.id)
+                is PaletteEntry.Card -> detail = detail.open(entry.card.id)
                 is PaletteEntry.View -> {
-                    panel = panel.close()
+                    detail = detail.close()
+                    listColumn = null
                     showSettings = entry.view == PaletteView.SETTINGS && settingsClient != null
                     showFeed = entry.view == PaletteView.FEED
                 }
@@ -276,10 +278,14 @@ fun main() {
                     if (event.type == KeyEventType.KeyDown) palette = palette.toggle()
                     true
                 }
-                event.key == Key.Escape && !palette.open && panel.cardId != null && !escapeClaim.textFieldFocused -> {
+                event.key == Key.Escape && !palette.open && detail.cardId != null && !escapeClaim.textFieldFocused -> {
                     if (event.type == KeyEventType.KeyDown) {
-                        panel = panel.escape(paletteOpen = false, textFieldFocused = false)
+                        detail = detail.escape(paletteOpen = false, textFieldFocused = false)
                     }
+                    true
+                }
+                event.key == Key.Escape && !palette.open && listColumn != null && !escapeClaim.textFieldFocused -> {
+                    if (event.type == KeyEventType.KeyDown) listColumn = null
                     true
                 }
                 !palette.open || event.key !in PALETTE_KEYS -> false
@@ -328,7 +334,9 @@ fun main() {
                         is WindowRequest.Open -> {
                             window.isMinimized = false
                             window.toFront()
-                            request.cardId?.let { panel = panel.open(it) }
+                            showFeed = false
+                            showSettings = false
+                            request.cardId?.let { detail = detail.open(it) }
                         }
                         WindowRequest.ShowFeed -> {
                             window.isMinimized = false
@@ -379,27 +387,38 @@ fun main() {
                     }
                     // The belt stays on screen (dimmed) once it has been drawn; before that, the connection screen.
                     view != null -> ScreenWithTabs(AppSection.BOARD, ::selectSection, feedAvailable, openSettings, ::openPalette, themeChoice, ::chooseTheme) {
-                        val openId = panel.cardId
                         FactoryScreen(
                             view = view,
                             pulse = pulseView,
                             connected = connected,
                             controller = owner,
                             onReload = board?.let { monitor -> monitor::resync },
-                            openCardId = openId,
-                            focusReturnCardId = panel.focusReturnCardId,
-                            onOpenCard = { panel = panel.open(it) },
-                            panelWidth = panel.width.dp,
-                            sidePanel = { width ->
-                                if (openId != null) {
-                                    OpenCard(openId, cardSource, ownerCommands, closureCommands, panel, width) { change ->
-                                        panel = change(panel)
-                                    }
-                                }
-                            },
+                            openCardId = detail.cardId,
+                            focusReturnCardId = detail.focusReturnCardId,
+                            onOpenCard = { detail = detail.open(it) },
+                            onShowAll = { listColumn = it },
+                            density = density,
+                            onDensity = { density = it },
                         )
                     }
                     else -> ConnectionScreen(state, onOpenSettings = openSettings)
+                }
+                val onBoard = view != null && !(showSettings && settingsClient != null) && !(feed != null && feedAvailable && showFeed)
+                if (onBoard) {
+                    listColumn?.let { column ->
+                        ColumnListModal(
+                            column = column,
+                            cards = view?.board?.cardsIn(column).orEmpty(),
+                            density = density,
+                            onOpenCard = { detail = detail.open(it) },
+                            onClose = { listColumn = null },
+                        )
+                    }
+                    detail.cardId?.let { id ->
+                        OpenCard(id, cardSource, ownerCommands, closureCommands, view?.board?.cards?.firstOrNull { it.id == id }, owner) {
+                            detail = detail.close()
+                        }
+                    }
                 }
                 if (palette.open) {
                     PaletteScreen(

@@ -58,7 +58,7 @@ private const val GEAR_TEETH = 8
 /** The icons of the controls, drawn as strokes on a 16 by 16 grid so they follow the theme. */
 enum class AppIcon {
     REFRESH, CLOSE, SUN, MOON, MONITOR, BOARD, FEED, GEAR, SEARCH, ARROW_LEFT, CHEVRON_LEFT, CHEVRON_RIGHT,
-    CHECK, UNDO, SEND, PLUS, MINUS, CARDS, ROWS, FIT, CALENDAR, DOC, CLOCK, PLAY, SUMMARY, ARROW_DOWN,
+    CHECK, UNDO, SEND, PLUS, MINUS, CARDS, ROWS, FIT, CALENDAR, DOC, CLOCK, PLAY, SUMMARY, ARROW_DOWN, ARROW_RIGHT,
 }
 
 @Composable
@@ -148,6 +148,10 @@ private fun DrawScope.drawIcon(icon: AppIcon, color: Color) {
         AppIcon.ARROW_DOWN -> {
             polyline(color, unit, 8f to 3f, 8f to 13f)
             polyline(color, unit, 3.5f to 8.5f, 8f to 13f, 12.5f to 8.5f)
+        }
+        AppIcon.ARROW_RIGHT -> {
+            polyline(color, unit, 3f to 8f, 13f to 8f)
+            polyline(color, unit, 8.5f to 3.5f, 13f to 8f, 8.5f to 12.5f)
         }
         AppIcon.CHEVRON_LEFT -> polyline(color, unit, 10f to 3.5f, 5.5f to 8f, 10f to 12.5f)
         AppIcon.CHEVRON_RIGHT -> polyline(color, unit, 6f to 3.5f, 10.5f to 8f, 6f to 12.5f)

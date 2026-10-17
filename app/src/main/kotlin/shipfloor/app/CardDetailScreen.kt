@@ -73,6 +73,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
+import java.time.Clock
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import shipfloor.core.Column as BoardColumn
 
@@ -110,23 +112,25 @@ fun Modifier.claimsEscape(): Modifier {
 }
 
 private const val PANEL_ID_LENGTH = 8
-private const val RESIZE_STEP = 16
-private val RESIZE_HANDLE = 8.dp
+private const val RECENT_EVENTS = 5
+private const val DETAIL_WIDTH = 0.708f
+private const val DETAIL_HEIGHT = 0.72f
+private val FACTS_WIDTH = 360.dp
 private val FOOTER_MAX_HEIGHT = 280.dp
 
 /**
- * The card as a side panel of the board, [width] wide. [specReview] is null without a daemon; the owner's decision
- * shows in the footer only for a card in `SPEC_REVIEW`. [closure] is the closure screen's controller; without it
- * (no daemon socket) a Done card has no closing action. All text is drawn as plain text.
+ * The card as a modal over the board, 70.8% of the window wide: its number and title and the path through the ten
+ * columns on top; the spec and the criteria on the left; the facts, the gates, the latest events and the runs on the
+ * right; the owner's decision at the foot. [specReview] is null without a daemon; the decision of a Spec Review card
+ * shows only with it. [closure] is the closure screen's controller; without it a Done card has no closing action.
+ * All text is drawn as plain text.
  */
 @Composable
-fun CardSidePanel(
+fun CardDetailModal(
     cardId: String,
     state: CardDetailState,
-    tab: PanelTab,
-    width: Dp,
-    onTab: (PanelTab) -> Unit,
-    onResize: (Int) -> Unit,
+    boardCard: BoardCard?,
+    controller: OwnerMoveController?,
     onClose: () -> Unit,
     zone: ZoneId = ZoneId.systemDefault(),
     specReview: SpecReviewController? = null,
@@ -135,112 +139,64 @@ fun CardSidePanel(
     val titleFocus = remember(cardId) { FocusRequester() }
     LaunchedEffect(cardId) { titleFocus.requestFocus() }
     val detail = (state as? CardDetailState.Loaded)?.detail
-    val column = detail?.let { found -> BoardColumn.entries.firstOrNull { it.name == found.column } }
+    val column = detail?.let { found -> BoardColumn.entries.firstOrNull { it.name == found.column } } ?: boardCard?.column
     if (state is CardDetailState.Loaded) LaunchedEffect(state.detail) { specReview?.onDetail(state.detail) }
-    Row(
-        Modifier
-            .fillMaxHeight()
-            .width(width)
-            .shadow(24.dp)
-            .background(Tokens.panel)
-            .semantics { paneTitle = Texts.panelTitle(cardId.take(PANEL_ID_LENGTH)) },
-    ) {
-        ResizeHandle(width.value.roundToInt(), onResize)
-        Column(Modifier.weight(1f).fillMaxHeight()) {
-            PanelHeader(cardId, detail, column, titleFocus, onClose)
-            if (detail != null) PanelTabs(tab, onTab)
-            Column(
-                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+    val scope = rememberCoroutineScope()
+    ModalFrame(DETAIL_WIDTH, DETAIL_HEIGHT, scrim = 0.35f, label = Texts.panelTitle(cardId.take(PANEL_ID_LENGTH)), onClose = onClose) {
+        Column(Modifier.fillMaxSize()) {
+            DetailHeader(cardId, detail, column, boardCard, titleFocus, onClose)
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.edge))
+            Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (state) {
-                    CardDetailState.Disconnected -> Muted(Texts.PANEL_DISCONNECTED)
-                    CardDetailState.NotFound -> {
-                        BasicText(Texts.cardNotFound(cardId), style = body(Tokens.text))
-                        Muted(Texts.PANEL_NOT_FOUND_EXIT)
-                    }
-                    CardDetailState.Loading -> Muted(Texts.LOADING_CARD)
-                    is CardDetailState.Loaded -> PanelBody(state.detail, tab, zone, closure)
+                    CardDetailState.Disconnected -> Notice(Texts.PANEL_DISCONNECTED)
+                    CardDetailState.NotFound -> Notice(Texts.cardNotFound(cardId) + " " + Texts.PANEL_NOT_FOUND_EXIT)
+                    CardDetailState.Loading -> Notice(Texts.LOADING_CARD)
+                    is CardDetailState.Loaded -> DetailBody(state.detail, boardCard, zone, closure)
                 }
             }
             if (column != null && detail != null) {
-                PanelFooterBar(column, detail, specReview.takeIf { specReviewActionsVisible(state) })
+                DetailFooter(column, detail, boardCard, controller, specReview.takeIf { specReviewActionsVisible(state) }, scope)
             }
         }
     }
 }
 
-/** The 8 px left edge: drag it, or press Left/Right with the focus on it, to change the width. */
 @Composable
-private fun ResizeHandle(widthPx: Int, onResize: (Int) -> Unit) {
-    val density = LocalDensity.current.density
-    val currentWidth by rememberUpdatedState(widthPx)
-    val currentResize by rememberUpdatedState(onResize)
-    var focused by remember { mutableStateOf(false) }
-    Box(
-        Modifier
-            .width(RESIZE_HANDLE)
-            .fillMaxHeight()
-            .semantics { contentDescription = Texts.RESIZE_PANEL }
-            .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .onKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
-                when (event.key) {
-                    Key.DirectionLeft -> currentResize(currentWidth + RESIZE_STEP)
-                    Key.DirectionRight -> currentResize(currentWidth - RESIZE_STEP)
-                    else -> return@onKeyEvent false
-                }
-                true
-            }
-            .pointerInput(Unit) {
-                var dragged = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { dragged = currentWidth.toFloat() },
-                    onHorizontalDrag = { change, amount ->
-                        change.consume()
-                        dragged -= amount / density
-                        currentResize(dragged.roundToInt())
-                    },
-                )
-            },
-    ) {
-        Box(Modifier.width(1.dp).fillMaxHeight().background(Tokens.edgeHi))
-        if (focused) Box(Modifier.fillMaxSize().border(2.dp, Tokens.sand))
-    }
+private fun Notice(text: String) {
+    BasicText(text, modifier = Modifier.padding(24.dp), style = body(Tokens.muted))
 }
 
 @Composable
-private fun PanelHeader(
+private fun DetailHeader(
     cardId: String,
     detail: CardDetail?,
     column: BoardColumn?,
+    boardCard: BoardCard?,
     titleFocus: FocusRequester,
     onClose: () -> Unit,
 ) {
-    val hue = column?.let { hueColor(stageHue(it)) } ?: Tokens.text
-    Column(Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, end = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.fillMaxWidth().padding(start = 24.dp, top = 16.dp, end = 20.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (column != null) StatusGlyph(glyphOf(column, boardCard?.blocked == true))
             BasicText(
                 "#${cardId.take(PANEL_ID_LENGTH)}",
                 modifier = Modifier.focusRequester(titleFocus).focusable().semantics { heading() },
-                style = TextStyle(fontFamily = mono, fontSize = 13.sp, color = hue),
+                style = TextStyle(fontFamily = mono, fontSize = 12.sp, color = Tokens.faint),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                detail?.total?.let {
-                    BasicText(
-                        formatCost(it.costUsd),
-                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                        style = tabular(TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.text)),
-                    )
-                }
-                IconButton(AppIcon.CLOSE, Texts.CLOSE_PANEL, onClick = onClose)
+            Box(Modifier.weight(1f))
+            detail?.total?.let {
+                BasicText(
+                    formatCost(it.costUsd),
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    style = tabular(TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.muted)),
+                )
             }
+            IconButton(AppIcon.CLOSE, Texts.CLOSE_MODAL, onClick = onClose)
         }
         detail?.let {
             BasicText(
                 it.title,
-                style = TextStyle(fontFamily = sans, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Tokens.text),
+                style = TextStyle(fontFamily = sans, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Tokens.text, lineHeight = 26.sp),
             )
         }
         if (column != null) CardPathRail(column)
@@ -251,10 +207,10 @@ private fun PanelHeader(
 @Composable
 private fun CardPathRail(column: BoardColumn) {
     val description = cardPathDescription(column)
-    val hue = hueColor(stageHue(column))
+    val hue = if (isWaitingForOwner(column)) Tokens.accent else Tokens.text
     Column(
         Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = description },
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             cardPath(column).forEach { mark ->
@@ -270,48 +226,87 @@ private fun CardPathRail(column: BoardColumn) {
     }
 }
 
+/** The spec and the criteria on the left; the facts and what the factory did on the right. */
 @Composable
-private fun PanelTabs(selected: PanelTab, onSelect: (PanelTab) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        PanelTab.entries.forEach { tab ->
-            val active = tab == selected
-            Column(
-                Modifier.width(IntrinsicSize.Max).selectable(selected = active, role = Role.Tab) { onSelect(tab) },
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    IconGlyph(tabIcon(tab), if (active) Tokens.text else Tokens.muted, size = 14.dp)
-                    BasicText(
-                        tabLabel(tab),
-                        style = TextStyle(
-                            fontFamily = sans,
-                            fontSize = 14.sp,
-                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (active) Tokens.text else Tokens.muted,
-                        ),
-                    )
-                }
-                Box(Modifier.height(2.dp).fillMaxWidth().background(if (active) Tokens.text else Color.Transparent))
+private fun DetailBody(detail: CardDetail, boardCard: BoardCard?, zone: ZoneId, closure: ClosureController?) {
+    Row(
+        Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SpecContent(detail)
+        }
+        Column(Modifier.width(FACTS_WIDTH).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            FactsPanel(detail, boardCard)
+            SummaryContent(detail, zone, closure)
+            RecentEvents(detail, zone)
+            RunsContent(detail)
+        }
+    }
+}
+
+/** The facts of the card that are not in its spec: how long it has been here, what it cost, how many runs. */
+@Composable
+private fun FactsPanel(detail: CardDetail, boardCard: BoardCard?) {
+    val age = boardCard?.let { CardFace.of(it, Clock.systemUTC()).age }
+    Column(
+        Modifier.fillMaxWidth().background(Tokens.panel, RoundedCornerShape(10.dp)).border(1.dp, Tokens.edge, RoundedCornerShape(10.dp)).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        BasicText(Texts.FACTS, style = TextStyle(fontFamily = sans, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Tokens.faint))
+        age?.let { Fact(Texts.FACT_IN_STAGE, it) }
+        Fact(Texts.FACT_COST, formatCost(detail.total.costUsd))
+        Fact(Texts.FACT_RUNS, detail.runs.size.toString())
+    }
+}
+
+@Composable
+private fun Fact(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        BasicText(label, style = meta(Tokens.faint))
+        BasicText(value, style = tabular(meta(Tokens.text)))
+    }
+}
+
+@Composable
+private fun RecentEvents(detail: CardDetail, zone: ZoneId) {
+    if (detail.events.isEmpty()) return
+    Section(Texts.TIMELINE) {
+        if (detail.events.size > RECENT_EVENTS) Muted(Texts.latestOf(RECENT_EVENTS, detail.events.size))
+        detail.events.takeLast(RECENT_EVENTS).forEach { EventRow(it, zone) }
+    }
+}
+
+/** The owner's way forward for this card: the decision of a spec, release or change of a staged card, or sending an Inbox card to refinement. */
+@Composable
+private fun DetailFooter(
+    column: BoardColumn,
+    detail: CardDetail,
+    boardCard: BoardCard?,
+    controller: OwnerMoveController?,
+    specReview: SpecReviewController?,
+    scope: CoroutineScope,
+) {
+    when {
+        column == BoardColumn.SPEC_REVIEW -> PanelFooterBar(column, detail, specReview)
+        controller != null && boardCard != null && column == BoardColumn.STAGED -> FooterRow { DecisionButtons(boardCard, controller, scope) }
+        controller != null && boardCard != null && column == BoardColumn.INBOX -> FooterRow {
+            AppButton(Texts.SEND_TO_REFINE, AppIcon.ARROW_RIGHT, ButtonKind.ACCENT) {
+                controller.hold(boardCard.id)
+                controller.chooseTarget(BoardColumn.READY_FOR_REFINEMENT)
+                scope.launch { controller.submit() }
             }
         }
     }
 }
 
-private fun tabIcon(tab: PanelTab): AppIcon =
-    when (tab) {
-        PanelTab.SUMMARY -> AppIcon.SUMMARY
-        PanelTab.SPEC -> AppIcon.DOC
-        PanelTab.EVENTS -> AppIcon.CLOCK
-        PanelTab.RUNS -> AppIcon.PLAY
+@Composable
+private fun FooterRow(content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.edge))
+        Box(Modifier.padding(horizontal = 24.dp, vertical = 12.dp)) { content() }
     }
-
-private fun tabLabel(tab: PanelTab): String =
-    when (tab) {
-        PanelTab.SUMMARY -> Texts.TAB_SUMMARY
-        PanelTab.SPEC -> Texts.TAB_SPEC
-        PanelTab.EVENTS -> Texts.TAB_EVENTS
-        PanelTab.RUNS -> Texts.TAB_RUNS
-    }
+}
 
 /** The fixed foot of the panel: the owner's decision for a card that waits for it, and nothing for any other card. */
 @Composable
@@ -332,49 +327,43 @@ private fun PanelFooterBar(column: BoardColumn, detail: CardDetail, specReview: 
     }
 }
 
+/** Closure, blocks, the pull request and the gates. */
 @Composable
-private fun PanelBody(detail: CardDetail, tab: PanelTab, zone: ZoneId, closure: ClosureController?) {
-    when (tab) {
-        PanelTab.SUMMARY -> {
-            if (closure != null && detail.column == DONE_COLUMN) ClosureEntry(detail, closure)
-            openBlock(detail.events)?.let { BlockNotice(it, zone) }
-            cardPullRequest(detail.events)?.let { PullRequestLine(it) }
-            Section(Texts.GATES) {
-                if (detail.gates.isEmpty()) Faint(Texts.NO_GATES)
-                detail.gates.forEach { GateLineView(gateLine(it)) }
-            }
+private fun SummaryContent(detail: CardDetail, zone: ZoneId, closure: ClosureController?) {
+    if (closure != null && detail.column == DONE_COLUMN) ClosureEntry(detail, closure)
+    openBlock(detail.events)?.let { BlockNotice(it, zone) }
+    cardPullRequest(detail.events)?.let { PullRequestLine(it) }
+    Section(Texts.GATES) {
+        if (detail.gates.isEmpty()) Faint(Texts.NO_GATES)
+        detail.gates.forEach { GateLineView(gateLine(it)) }
+    }
+}
+
+/** The criteria with their tests, and the spec text. */
+@Composable
+private fun SpecContent(detail: CardDetail) {
+    Section(Texts.SPEC) {
+        if (detail.spec.status == "missing" || detail.spec.text.isBlank()) {
+            Faint(Texts.NO_SPEC)
+        } else {
+            SelectionContainer { BasicText(detail.spec.text, modifier = Modifier.widthIn(max = 640.dp), style = body()) }
         }
-        PanelTab.SPEC -> {
-            if (detail.criteria.isNotEmpty()) {
-                Section(Texts.CRITERIA) { detail.criteria.forEach { CriterionLine(it) } }
-            }
-            Section(Texts.SPEC) {
-                if (detail.spec.status == "missing" || detail.spec.text.isBlank()) {
-                    Faint(Texts.NO_SPEC)
-                } else {
-                    SelectionContainer { BasicText(detail.spec.text, modifier = Modifier.widthIn(max = 640.dp), style = body()) }
-                }
-            }
-        }
-        PanelTab.EVENTS -> Section(Texts.TIMELINE) {
-            BasicText(
-                "${detail.events.size}",
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.faint),
-            )
-            if (detail.eventsTruncated) Muted(Texts.EVENTS_TRUNCATED)
-            if (detail.events.isEmpty()) Faint(Texts.NO_EVENTS) else detail.events.forEach { EventRow(it, zone) }
-        }
-        PanelTab.RUNS -> Section(Texts.RUNS) {
-            if (detail.runs.isEmpty()) Faint(Texts.NO_RUNS)
-            costByStage(detail.runs).forEach { StageCostGroup(it) }
-            if (detail.runs.isNotEmpty()) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    val bold = TextStyle(fontFamily = sans, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Tokens.text)
-                    BasicText(if (detail.total.status == CostStatus.PARTIAL) "${Texts.TOTAL} (${Texts.PARTIAL_COST})" else Texts.TOTAL, style = bold)
-                    BasicText(formatCost(detail.total.costUsd), style = tabular(bold))
-                }
-            }
+    }
+    if (detail.criteria.isNotEmpty()) {
+        Section(Texts.CRITERIA) { detail.criteria.forEach { CriterionLine(it) } }
+    }
+}
+
+/** What each run cost, by stage, and the total. */
+@Composable
+private fun RunsContent(detail: CardDetail) {
+    if (detail.runs.isEmpty()) return
+    Section(Texts.RUNS) {
+        costByStage(detail.runs).forEach { StageCostGroup(it) }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            val bold = TextStyle(fontFamily = sans, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Tokens.text)
+            BasicText(if (detail.total.status == CostStatus.PARTIAL) "${Texts.TOTAL} (${Texts.PARTIAL_COST})" else Texts.TOTAL, style = bold)
+            BasicText(formatCost(detail.total.costUsd), style = tabular(bold))
         }
     }
 }

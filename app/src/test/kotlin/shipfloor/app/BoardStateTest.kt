@@ -56,6 +56,33 @@ import shipfloor.core.QueueForecast
  */
 class BoardStateTest {
     @Test
+    fun `the list of a column is filtered by title or number, ignoring case, and keeps what matches`() {
+        val cards = listOf(
+            BoardFixtures.aCard("a1b2c3d4", Column.INBOX, "Exportar eventos em CSV"),
+            BoardFixtures.aCard("e5f6a7b8", Column.INBOX, "Atalho para criar card"),
+            BoardFixtures.aCard("a9a9a9a9", Column.INBOX, "Menu da bandeja"),
+        )
+
+        assertThat(cardsForList(cards, "csv", ListOrder.TITLE).map { it.id }).containsExactly("a1b2c3d4")
+        assertThat(cardsForList(cards, "  A9A9 ", ListOrder.TITLE).map { it.id }).containsExactly("a9a9a9a9")
+        assertThat(cardsForList(cards, "", ListOrder.TITLE)).hasSize(3)
+        assertThat(cardsForList(cards, "nada disso", ListOrder.TITLE)).isEmpty()
+    }
+
+    @Test
+    fun `the list is ordered oldest first, with the cards of unknown age last, or by title`() {
+        val now = Instant.parse("2026-10-17T12:00:00Z")
+        val cards = listOf(
+            BoardCard("new", "Beta", Column.INBOX, enteredAt = now.minusSeconds(60)),
+            BoardCard("none", "Alpha", Column.INBOX, enteredAt = null),
+            BoardCard("old", "Gamma", Column.INBOX, enteredAt = now.minusSeconds(3600)),
+        )
+
+        assertThat(cardsForList(cards, "", ListOrder.OLDEST).map { it.id }).containsExactly("old", "new", "none")
+        assertThat(cardsForList(cards, "", ListOrder.TITLE).map { it.id }).containsExactly("none", "new", "old")
+    }
+
+    @Test
     fun `the two lanes hold the ten columns once each, in product order`() {
         assertThat(LANE_ONE + LANE_TWO).containsExactlyElementsOf(Column.entries)
         assertThat(LANE_ONE).hasSize(5)
@@ -803,23 +830,12 @@ class BoardStateTest {
     }
 
     @Test
-    fun `AC-1 opening another card swaps the card of the open panel without closing it`() {
-        val opened = SidePanelState().open("a1")
+    fun `AC-1 opening another card swaps the card of the open modal without closing it`() {
+        val opened = DetailModalState().open("a1")
         val swapped = opened.open("b2")
 
         assertThat(opened.cardId).isEqualTo("a1")
         assertThat(swapped.cardId).isEqualTo("b2")
-    }
-
-    @Test
-    fun `AC-2 the panel opens on Summary and the chosen tab survives a card swap`() {
-        val opened = SidePanelState().open("a1")
-        val onEvents = opened.selectTab(PanelTab.EVENTS).open("b2")
-
-        assertThat(PanelTab.entries.map { it.name }).containsExactly("SUMMARY", "SPEC", "EVENTS", "RUNS")
-        assertThat(opened.tab).isEqualTo(PanelTab.SUMMARY)
-        assertThat(onEvents.tab).isEqualTo(PanelTab.EVENTS)
-        assertThat(onEvents.close().open("c3").tab).isEqualTo(PanelTab.SUMMARY)
     }
 
     @Test
@@ -845,37 +861,8 @@ class BoardStateTest {
     }
 
     @Test
-    fun `AC-3 the width is clamped between 360 and 680 and starts at 480`() {
-        val panel = SidePanelState().open("a1")
-
-        assertThat(SidePanelState.MIN_WIDTH).isEqualTo(360)
-        assertThat(SidePanelState.MAX_WIDTH).isEqualTo(680)
-        assertThat(panel.width).isEqualTo(480)
-        assertThat(panel.resize(500).width).isEqualTo(500)
-        assertThat(panel.resize(100).width).isEqualTo(360)
-        assertThat(panel.resize(5000).width).isEqualTo(680)
-        assertThat(panel.resize(360).width).isEqualTo(360)
-        assertThat(panel.resize(680).width).isEqualTo(680)
-    }
-
-    @Test
-    fun `AC-3 the width is kept when the panel closes and reopens`() {
-        val reopened = SidePanelState().open("a1").resize(600).close().open("b2")
-
-        assertThat(reopened.width).isEqualTo(600)
-    }
-
-    @Test
-    fun `AC-4 below 880 px the panel overlays the board and from 880 px it shares the row`() {
-        assertThat(panelPlacement(879)).isEqualTo(PanelPlacement.OVERLAY)
-        assertThat(panelPlacement(600)).isEqualTo(PanelPlacement.OVERLAY)
-        assertThat(panelPlacement(880)).isEqualTo(PanelPlacement.SIDE_BY_SIDE)
-        assertThat(panelPlacement(1600)).isEqualTo(PanelPlacement.SIDE_BY_SIDE)
-    }
-
-    @Test
-    fun `AC-5 Esc outside a text field closes the panel and hands the focus back to the card that opened it`() {
-        val opened = SidePanelState().open("a1").open("b2")
+    fun `AC-5 Esc outside a text field closes the modal and hands the focus back to the card that opened it`() {
+        val opened = DetailModalState().open("a1").open("b2")
 
         val closed = opened.escape(paletteOpen = false, textFieldFocused = false)
 
@@ -885,7 +872,7 @@ class BoardStateTest {
 
     @Test
     fun `AC-5 Esc inside a text field or with the palette open leaves the panel open`() {
-        val opened = SidePanelState().open("a1")
+        val opened = DetailModalState().open("a1")
 
         assertThat(opened.escape(paletteOpen = false, textFieldFocused = true)).isEqualTo(opened)
         assertThat(opened.escape(paletteOpen = true, textFieldFocused = false)).isEqualTo(opened)

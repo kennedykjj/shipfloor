@@ -65,45 +65,32 @@ val OWNER_DECISION_COLUMNS: Set<Column> = OWNER_WAIT_COLUMNS
 
 fun isWaitingForOwner(column: Column): Boolean = column in OWNER_DECISION_COLUMNS
 
-enum class PanelTab { SUMMARY, SPEC, EVENTS, RUNS }
-
-/**
- * The side panel of the board: which card is open, the chosen tab and the width.
- * The tab and the width outlive the card, so they survive a swap or a close and reopen in the same session.
- */
-data class SidePanelState(
+/** The card detail modal: which card is open, and which card takes the focus back when Esc closes it. */
+data class DetailModalState(
     val cardId: String? = null,
-    val tab: PanelTab = PanelTab.SUMMARY,
-    val width: Int = DEFAULT_WIDTH,
     val focusReturnCardId: String? = null,
 ) {
-    /** Opens [cardId], or swaps the card of an open panel; the tab is kept while the panel stays open. */
-    fun open(cardId: String): SidePanelState =
-        copy(cardId = cardId, tab = if (this.cardId == null) PanelTab.SUMMARY else tab, focusReturnCardId = null)
+    fun open(cardId: String): DetailModalState = copy(cardId = cardId, focusReturnCardId = null)
 
-    fun close(): SidePanelState = copy(cardId = null, focusReturnCardId = null)
+    fun close(): DetailModalState = copy(cardId = null, focusReturnCardId = null)
 
-    fun selectTab(tab: PanelTab): SidePanelState = copy(tab = tab)
-
-    fun resize(width: Int): SidePanelState = copy(width = width.coerceIn(MIN_WIDTH, MAX_WIDTH))
-
-    /** Esc closes the panel and hands the focus back to its card, unless the palette or a text field owns the key. */
-    fun escape(paletteOpen: Boolean, textFieldFocused: Boolean): SidePanelState =
+    /** Esc closes the modal and hands the focus back to its card, unless the palette or a text field owns the key. */
+    fun escape(paletteOpen: Boolean, textFieldFocused: Boolean): DetailModalState =
         if (cardId == null || paletteOpen || textFieldFocused) this else copy(cardId = null, focusReturnCardId = cardId)
-
-    companion object {
-        const val MIN_WIDTH = 360
-        const val MAX_WIDTH = 680
-        const val DEFAULT_WIDTH = 480
-    }
 }
 
-enum class PanelPlacement { SIDE_BY_SIDE, OVERLAY }
+/** How the list of a full column is ordered: the oldest in the column first, or by title. */
+enum class ListOrder { OLDEST, TITLE }
 
-private const val PANEL_SIDE_BY_SIDE_MIN_WINDOW = 880
-
-fun panelPlacement(windowWidth: Int): PanelPlacement =
-    if (windowWidth < PANEL_SIDE_BY_SIDE_MIN_WINDOW) PanelPlacement.OVERLAY else PanelPlacement.SIDE_BY_SIDE
+/** The cards of a column in its list: filtered by number or title (case-insensitive), then ordered. */
+fun cardsForList(cards: List<BoardCard>, query: String, order: ListOrder): List<BoardCard> {
+    val text = query.trim()
+    val filtered = if (text.isEmpty()) cards else cards.filter { it.title.contains(text, ignoreCase = true) || it.id.contains(text, ignoreCase = true) }
+    return when (order) {
+        ListOrder.OLDEST -> filtered.sortedBy { it.enteredAt ?: Instant.MAX }
+        ListOrder.TITLE -> filtered.sortedBy { it.title.lowercase() }
+    }
+}
 
 enum class PathStep { TRAVELED, CURRENT, NEXT }
 

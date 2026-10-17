@@ -116,7 +116,8 @@ internal val LANE_ONE = listOf(
 internal val LANE_TWO = listOf(
     BoardColumn.CODING, BoardColumn.VALIDATION, BoardColumn.STAGED, BoardColumn.READY_FOR_PROD, BoardColumn.DONE,
 )
-private const val DONE_SHOWN = 4
+private const val CARDS_SHOWN = 4
+private const val CHIPS_SHOWN = 9
 private val COLUMN_MIN_HEIGHT = 112.dp
 
 /**
@@ -136,7 +137,9 @@ fun BoardScreen(
     openCardId: String? = null,
     focusReturnCardId: String? = null,
     onOpenCard: (String) -> Unit = {},
-    initialDensity: BoardDensity = BoardDensity.CARDS,
+    onShowAll: (BoardColumn) -> Unit = {},
+    density: BoardDensity = BoardDensity.CARDS,
+    onDensity: (BoardDensity) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     var reloading by remember { mutableStateOf(false) }
@@ -145,8 +148,6 @@ fun BoardScreen(
     val move by (controller?.state ?: remember { MutableStateFlow(OwnerMoveState()) }).collectAsState()
     val scrollState = rememberScrollState()
     var laneTwoTop by remember { mutableStateOf(0) }
-    var density by remember { mutableStateOf(initialDensity) }
-    var doneExpanded by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier.fillMaxSize().background(Tokens.ground).padding(top = 12.dp).semantics { contentDescription = Texts.BOARD },
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -159,7 +160,7 @@ fun BoardScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    LayoutControls(density) { density = it }
+                    LayoutControls(density, onDensity)
                     if (onReload != null) {
                         ReloadButton(reloading) {
                             if (!reloading) {
@@ -240,7 +241,7 @@ fun BoardScreen(
                     LANE_ONE.forEachIndexed { index, column ->
                         LaneColumn(
                             column, index, board?.cardsIn(column), view?.columnTimes?.get(column), density, controller, held, move,
-                            laneBounds, scope, openCardId, focusReturnCardId, onOpenCard, doneExpanded, { doneExpanded = it },
+                            laneBounds, scope, openCardId, focusReturnCardId, onOpenCard, onShowAll,
                             Modifier.weight(1f).fillMaxHeight(),
                         )
                     }
@@ -263,7 +264,7 @@ fun BoardScreen(
                     LANE_TWO.forEachIndexed { index, column ->
                         LaneColumn(
                             column, index, board?.cardsIn(column), view?.columnTimes?.get(column), density, controller, held, move,
-                            laneBounds, scope, openCardId, focusReturnCardId, onOpenCard, doneExpanded, { doneExpanded = it },
+                            laneBounds, scope, openCardId, focusReturnCardId, onOpenCard, onShowAll,
                             Modifier.weight(1f).fillMaxHeight(),
                         )
                     }
@@ -527,8 +528,7 @@ private fun LaneColumn(
     openCardId: String?,
     focusReturnCardId: String?,
     onOpenCard: (String) -> Unit,
-    doneExpanded: Boolean,
-    onDoneExpanded: (Boolean) -> Unit,
+    onShowAll: (BoardColumn) -> Unit,
     modifier: Modifier,
 ) {
     val count = cards?.size
@@ -581,9 +581,10 @@ private fun LaneColumn(
             Modifier.fillMaxWidth().padding(start = sidePad, end = sidePad, bottom = 14.dp),
             verticalArrangement = Arrangement.spacedBy(gap),
         ) {
-            val isDone = column == BoardColumn.DONE
-            val ordered = if (isDone) cards?.asReversed() else cards
-            val shown = if (isDone && !doneExpanded) ordered?.take(DONE_SHOWN) else ordered
+            // Done lists its newest first. A column keeps its size: the first few cards, then a "+N" card.
+            val ordered = if (column == BoardColumn.DONE) cards?.asReversed() else cards
+            val limit = if (chips) CHIPS_SHOWN else CARDS_SHOWN
+            val shown = ordered?.take(limit)
             when {
                 cards == null -> Meta(Texts.LOADING_BOARD, Tokens.faint, Modifier.padding(start = if (chips) 14.dp else 2.dp))
                 cards.isEmpty() && !accepts -> EmptyBox(Texts.EMPTY_COLUMN)
@@ -595,21 +596,8 @@ private fun LaneColumn(
                     }
                 }
             }
-            if (isDone && (ordered?.size ?: 0) > DONE_SHOWN) {
-                Row(
-                    modifier = Modifier
-                        .clickable(role = Role.Button) { onDoneExpanded(!doneExpanded) }
-                        .padding(horizontal = if (chips) 14.dp else 2.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconGlyph(AppIcon.ARROW_DOWN, Tokens.faint, size = 13.dp)
-                    BasicText(
-                        if (doneExpanded) Texts.SHOW_FEWER else Texts.showOlder((ordered?.size ?: 0) - DONE_SHOWN),
-                        style = TextStyle(fontFamily = sans, fontSize = 12.5.sp, color = Tokens.faint),
-                    )
-                }
-            }
+            val hidden = (ordered?.size ?: 0) - limit
+            if (hidden > 0) MoreCard(hidden, column, chips) { onShowAll(column) }
             if (accepts) EmptyBox(Texts.DROP_HERE, highlighted = true, modifier = Modifier.padding(horizontal = if (chips) 12.dp else 0.dp, vertical = if (chips) 8.dp else 0.dp))
         }
     }
@@ -627,6 +615,51 @@ private fun DrawScope.drawFlowChevron(fill: Color, border: Color, mark: Color) {
         lineTo(center.x - 1.8.dp.toPx(), center.y + 3.2.dp.toPx())
     }
     drawPath(path, mark, style = Stroke(1.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+}
+
+/** The last card of a full column: how many more there are, and a click opens them all. */
+@Composable
+private fun MoreCard(count: Int, column: BoardColumn, chip: Boolean, onClick: () -> Unit) {
+    val description = Texts.showAllIn(column, count)
+    if (chip) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(30.dp)
+                .clickable(role = Role.Button, onClick = onClick)
+                .semantics { contentDescription = description }
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            IconGlyph(AppIcon.ARROW_DOWN, Tokens.faint, size = 13.dp)
+            BasicText(Texts.moreCards(count), style = TextStyle(fontFamily = sans, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = Tokens.muted))
+        }
+        return
+    }
+    val edge = Tokens.edgeHi
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                drawRoundRect(
+                    edge,
+                    cornerRadius = CornerRadius(8.dp.toPx()),
+                    style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))),
+                )
+            }
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        BasicText("+$count", style = TextStyle(fontFamily = sans, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Tokens.text, fontFeatureSettings = "tnum"))
+        Column {
+            BasicText(Texts.CARDS_WORD, style = TextStyle(fontFamily = sans, fontSize = 12.5.sp, color = Tokens.muted))
+            BasicText(Texts.SEE_ALL, style = TextStyle(fontFamily = sans, fontSize = 12.5.sp, color = Tokens.muted))
+        }
+    }
 }
 
 /** A dashed box: "vazia" in an empty column, "soltar aqui" in the column a held card can go to. */
@@ -653,7 +686,7 @@ private fun EmptyBox(text: String, highlighted: Boolean = false, modifier: Modif
 
 /** A chip is a list row: the state glyph and the title on one line, no box; the full face is the accessibility description. */
 @Composable
-private fun Chip(card: BoardCard, open: Boolean, takesFocus: Boolean, onOpenCard: (String) -> Unit) {
+internal fun Chip(card: BoardCard, open: Boolean, takesFocus: Boolean, onOpenCard: (String) -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(takesFocus) { if (takesFocus) focus.requestFocus() }
@@ -771,9 +804,18 @@ private fun Card(
             },
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        CardBody(card, face, glyph)
+        if (controller != null && waiting) DecisionButtons(card, controller, scope)
+    }
+}
+
+/** The inside of a card: the state glyph and the number, the title, then the age and the cost. */
+@Composable
+internal fun CardBody(card: BoardCard, face: CardFace, glyph: CardGlyph) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             StatusGlyph(glyph, size = 16.dp)
-            BasicText(shortId, style = TextStyle(fontFamily = mono, fontSize = 11.sp, color = Tokens.faint))
+            BasicText(card.id.take(ID_LENGTH), style = TextStyle(fontFamily = mono, fontSize = 11.sp, color = Tokens.faint))
             face.blockedLabel?.let { BasicText(it, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.bad)) }
         }
         BasicText(
@@ -793,21 +835,24 @@ private fun Card(
                 BasicText(cost, style = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Tokens.muted, fontFeatureSettings = "tnum"))
             }
         }
-        if (controller != null && waiting) {
-            val spec = card.column == BoardColumn.SPEC_REVIEW
-            val approveTo = if (spec) BoardColumn.READY_FOR_DEV else BoardColumn.READY_FOR_PROD
-            val changeTo = if (spec) BoardColumn.READY_FOR_REFINEMENT else BoardColumn.CODING
-            fun decide(to: BoardColumn) {
-                controller.hold(card.id)
-                controller.chooseTarget(to)
-                scope.launch { controller.submit() }
-            }
-            @OptIn(ExperimentalLayoutApi::class)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                AppButton(if (spec) Texts.APPROVE else Texts.RELEASE, AppIcon.CHECK, ButtonKind.ACCENT) { decide(approveTo) }
-                AppButton(Texts.REQUEST_CHANGE, AppIcon.UNDO) { decide(changeTo) }
-            }
-        }
+    }
+}
+
+/** Approve (or release) and ask for a change, for a card that waits for the owner; both go through the owner's move. */
+@Composable
+internal fun DecisionButtons(card: BoardCard, controller: OwnerMoveController, scope: CoroutineScope) {
+    val spec = card.column == BoardColumn.SPEC_REVIEW
+    val approveTo = if (spec) BoardColumn.READY_FOR_DEV else BoardColumn.READY_FOR_PROD
+    val changeTo = if (spec) BoardColumn.READY_FOR_REFINEMENT else BoardColumn.CODING
+    fun decide(to: BoardColumn) {
+        controller.hold(card.id)
+        controller.chooseTarget(to)
+        scope.launch { controller.submit() }
+    }
+    @OptIn(ExperimentalLayoutApi::class)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        AppButton(if (spec) Texts.APPROVE else Texts.RELEASE, AppIcon.CHECK, ButtonKind.ACCENT) { decide(approveTo) }
+        AppButton(Texts.REQUEST_CHANGE, AppIcon.UNDO) { decide(changeTo) }
     }
 }
 

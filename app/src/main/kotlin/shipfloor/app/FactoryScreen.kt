@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import shipfloor.core.Column as BoardColumn
 
 /** The three places the app bar leads to. */
 enum class AppSection { BOARD, FEED }
@@ -149,10 +150,7 @@ private fun SearchButton(onClick: () -> Unit) {
 fun waitingCount(view: BoardView?): Int =
     view?.board?.cards?.count { isWaitingForOwner(it.column) } ?: 0
 
-/**
- * The factory view: what the factory says, the time split and the board with the optional card panel beside it.
- * [sidePanel] draws the open card at the width it is given; it is empty when no card is open.
- */
+/** The factory view: what the factory says, the time split and the board; the modals are drawn by the window. */
 @Composable
 fun FactoryScreen(
     view: BoardView?,
@@ -164,9 +162,9 @@ fun FactoryScreen(
     openCardId: String? = null,
     focusReturnCardId: String? = null,
     onOpenCard: (String) -> Unit = {},
-    initialDensity: BoardDensity = BoardDensity.CARDS,
-    panelWidth: Dp = 0.dp,
-    sidePanel: @Composable (Dp) -> Unit = {},
+    onShowAll: (BoardColumn) -> Unit = {},
+    density: BoardDensity = BoardDensity.CARDS,
+    onDensity: (BoardDensity) -> Unit = {},
 ) {
     Column(Modifier.fillMaxSize()) {
         PulseStrip(pulse, waiting = waitingCount(view))
@@ -175,32 +173,20 @@ fun FactoryScreen(
                 FlowBar(split, dimmed = !shown.live, modifier = Modifier.padding(start = 20.dp, top = 12.dp, end = 20.dp))
             }
         }
-        BoxWithConstraints(Modifier.weight(1f)) {
-            val width = minOf(panelWidth, maxWidth)
-            val board: @Composable () -> Unit = {
-                BoardScreen(
-                    view,
-                    connected = connected,
-                    controller = controller,
-                    onOpenSettings = onOpenSettings,
-                    onReload = onReload,
-                    openCardId = openCardId,
-                    focusReturnCardId = focusReturnCardId,
-                    onOpenCard = onOpenCard,
-                    initialDensity = initialDensity,
-                )
-            }
-            when (panelPlacement(maxWidth.value.toInt())) {
-                PanelPlacement.SIDE_BY_SIDE -> Row(Modifier.fillMaxSize()) {
-                    Box(Modifier.weight(1f)) { board() }
-                    sidePanel(width)
-                }
-                PanelPlacement.OVERLAY -> Box(Modifier.fillMaxSize()) {
-                    board()
-                    Box(Modifier.align(Alignment.CenterEnd)) { sidePanel(width) }
-                }
-            }
+        Box(Modifier.weight(1f)) {
+            BoardScreen(
+                view,
+                connected = connected,
+                controller = controller,
+                onOpenSettings = onOpenSettings,
+                onReload = onReload,
+                openCardId = openCardId,
+                focusReturnCardId = focusReturnCardId,
+                onOpenCard = onOpenCard,
+                onShowAll = onShowAll,
+                density = density,
+                onDensity = onDensity,
+            )
         }
     }
 }
-
