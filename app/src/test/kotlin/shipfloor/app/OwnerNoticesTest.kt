@@ -1,5 +1,7 @@
 package shipfloor.app
 
+import java.nio.file.Files
+import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
@@ -7,6 +9,7 @@ import java.time.ZoneOffset
 import org.assertj.core.api.Assertions.assertThat
 import org.freedesktop.dbus.Marshalling
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import shipfloor.core.Column
 import shipfloor.core.EventType
 import shipfloor.core.OWNER_WAIT_COLUMNS
@@ -431,5 +434,27 @@ class OwnerNoticesTest {
             assertThat(into.contains(OwnerNoticeFixtures.A)).describedAs(column.name).isTrue()
             assertThat(out.contains(OwnerNoticeFixtures.A)).describedAs(column.name).isFalse()
         }
+    }
+}
+
+class SingleInstanceTest {
+    @Test
+    fun `the first launch holds the lock and a second one learns who is running`(@TempDir dir: Path) {
+        val first = SingleInstance.tryAcquire(dir, ownPid = 4242)
+        val second = SingleInstance.tryAcquire(dir, ownPid = 9999)
+
+        assertThat(first).isInstanceOf(SingleInstance.Result.First::class.java)
+        assertThat(second).isEqualTo(SingleInstance.Result.Running(4242))
+        (first as SingleInstance.Result.First).lock?.release()
+    }
+
+    @Test
+    fun `a lock file that cannot be made does not stop the app from starting`(@TempDir dir: Path) {
+        val blocked = dir.resolve("file")
+        Files.writeString(blocked, "not a directory")
+
+        val result = SingleInstance.tryAcquire(blocked.resolve("shipfloor"))
+
+        assertThat(result).isEqualTo(SingleInstance.Result.First(null))
     }
 }

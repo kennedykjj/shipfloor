@@ -179,6 +179,13 @@ private const val TOKEN_RELATIVE_PATH = "shipfloor/owner.token"
 fun main() {
     logEvent("app_startup", mapOf("phase" to "main", "ms" to sinceJvmStart().toString()))
     val runtimeDir = System.getenv("XDG_RUNTIME_DIR")?.takeIf { it.isNotBlank() }
+    // A second launch only asks the running app to show its window.
+    val instance = runtimeDir?.let { SingleInstance.tryAcquire(Path.of(it, "shipfloor")) }
+    if (instance is SingleInstance.Result.Running) {
+        val reached = instance.pid?.let(SingleInstance::activate) == true
+        logEvent("app_already_running", mapOf("shown" to reached.toString()))
+        return
+    }
     val monitor = runtimeDir?.let {
         ConnectionMonitor(SocketDaemonProbe(Path.of(it, SOCKET_RELATIVE_PATH)), SystemctlDaemonStarter(), Clock.systemUTC())
     }
@@ -248,6 +255,8 @@ fun main() {
         val pulseView by (pulse?.view ?: noPulse).collectAsState()
         val connected = state == ConnectionState.Connected
         var showFeed by remember { mutableStateOf(false) }
+        var windowVisible by remember { mutableStateOf(true) }
+        val hasTray = ports.tray !== NoTray
         var detail by remember { mutableStateOf(DetailModalState()) }
         var listColumn by remember { mutableStateOf<BoardColumn?>(null) }
         var density by remember { mutableStateOf(BoardDensity.CARDS) }
@@ -319,7 +328,9 @@ fun main() {
             }
         }
         Window(
-            onCloseRequest = ::exitApplication,
+            // The X hides the window and leaves the app in the tray; without a tray there would be no way back.
+            onCloseRequest = { if (hasTray) windowVisible = false else exitApplication() },
+            visible = windowVisible,
             title = Texts.TITLE,
             icon = remember { BitmapPainter(TrayIcons.renderTile(256).toComposeImageBitmap()) },
             state = rememberWindowState(size = DpSize(1280.dp, 800.dp), position = WindowPosition.PlatformDefault),
@@ -332,21 +343,27 @@ fun main() {
                 requests.collect { request ->
                     when (request) {
                         is WindowRequest.Open -> {
+                            windowVisible = true
                             window.isMinimized = false
                             window.toFront()
+                            window.requestFocus()
                             showFeed = false
                             showSettings = false
                             request.cardId?.let { detail = detail.open(it) }
                         }
                         WindowRequest.ShowFeed -> {
+                            windowVisible = true
                             window.isMinimized = false
                             window.toFront()
+                            window.requestFocus()
                             showSettings = false
                             showFeed = true
                         }
                         WindowRequest.ShowSettings -> {
+                            windowVisible = true
                             window.isMinimized = false
                             window.toFront()
+                            window.requestFocus()
                             showSettings = settingsClient != null
                         }
                         WindowRequest.Quit -> exitApplication()
