@@ -49,7 +49,7 @@ private val CONTROL_SHAPE = RoundedCornerShape(6.dp)
 private val ICON_SIZE = 16.dp
 
 /** The icons of the controls, drawn as strokes so they follow the theme. */
-enum class AppIcon { REFRESH, SUN, MOON, MONITOR }
+enum class AppIcon { REFRESH, CLOSE, SUN, MOON, MONITOR }
 
 @Composable
 fun IconGlyph(icon: AppIcon, color: Color, modifier: Modifier = Modifier) {
@@ -68,6 +68,10 @@ private fun DrawScope.drawIcon(icon: AppIcon, color: Color) {
                 lineTo(12.2f * unit, 5.6f * unit)
             }
             drawPath(head, color, style = line)
+        }
+        AppIcon.CLOSE -> {
+            drawLine(color, Offset(4.2f * unit, 4.2f * unit), Offset(11.8f * unit, 11.8f * unit), 1.5f * unit, StrokeCap.Round)
+            drawLine(color, Offset(11.8f * unit, 4.2f * unit), Offset(4.2f * unit, 11.8f * unit), 1.5f * unit, StrokeCap.Round)
         }
         AppIcon.SUN -> {
             drawCircle(color, radius = 3f * unit, center = center, style = line)

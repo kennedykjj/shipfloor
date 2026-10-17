@@ -234,15 +234,7 @@ private fun PanelHeader(
                         style = tabular(TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.text)),
                     )
                 }
-                BasicText(
-                    Texts.CLOSE_PANEL,
-                    modifier = Modifier
-                        .heightIn(min = 24.dp)
-                        .border(1.dp, Tokens.edge, RoundedCornerShape(8.dp))
-                        .clickable(role = Role.Button, onClick = onClose)
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                    style = meta(Tokens.text),
-                )
+                IconButton(AppIcon.CLOSE, Texts.CLOSE_PANEL, onClick = onClose)
             }
         }
         detail?.let {
