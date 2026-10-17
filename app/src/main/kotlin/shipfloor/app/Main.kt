@@ -67,6 +67,7 @@ private const val OWNER_TOKEN_FILE = "owner.token"
 private const val REQUEST_BUFFER = 8
 private const val TICK_EVERY_MILLIS = 60_000L
 private const val SENT_REFRESH_MILLIS = 2_000L
+private const val HIDDEN_GC_DELAY_MILLIS = 800L
 
 /** Keys the window handles itself while the palette is open; everything else reaches the text field. */
 private val PALETTE_KEYS = setOf(
@@ -255,8 +256,9 @@ fun main() {
         val pulseView by (pulse?.view ?: noPulse).collectAsState()
         val connected = state == ConnectionState.Connected
         var showFeed by remember { mutableStateOf(false) }
-        var windowVisible by remember { mutableStateOf(true) }
         val hasTray = ports.tray !== NoTray
+        // SHIPFLOOR_START_HIDDEN=1 starts the app in the tray with no window, for a login start.
+        var windowVisible by remember { mutableStateOf(!(hasTray && System.getenv("SHIPFLOOR_START_HIDDEN") == "1")) }
         var detail by remember { mutableStateOf(DetailModalState()) }
         var listColumn by remember { mutableStateOf<BoardColumn?>(null) }
         var density by remember { mutableStateOf(BoardDensity.CARDS) }
@@ -327,10 +329,39 @@ fun main() {
                 withContext(Dispatchers.IO) { shell.tick() }
             }
         }
-        Window(
+        // Requests from the tray and from the notifications only change state, so they work with no window at all.
+        LaunchedEffect(Unit) {
+            requests.collect { request ->
+                when (request) {
+                    is WindowRequest.Open -> {
+                        windowVisible = true
+                        showFeed = false
+                        showSettings = false
+                        request.cardId?.let { detail = detail.open(it) }
+                    }
+                    WindowRequest.ShowFeed -> {
+                        windowVisible = true
+                        showSettings = false
+                        showFeed = true
+                    }
+                    WindowRequest.ShowSettings -> {
+                        windowVisible = true
+                        showSettings = settingsClient != null
+                    }
+                    WindowRequest.Quit -> exitApplication()
+                }
+            }
+        }
+        // With the window hidden the app is only its readings and its tray icon: give the memory back.
+        LaunchedEffect(windowVisible) {
+            if (!windowVisible) {
+                delay(HIDDEN_GC_DELAY_MILLIS)
+                System.gc()
+            }
+        }
+        if (windowVisible) Window(
             // The X hides the window and leaves the app in the tray; without a tray there would be no way back.
             onCloseRequest = { if (hasTray) windowVisible = false else exitApplication() },
-            visible = windowVisible,
             title = Texts.TITLE,
             icon = remember { BitmapPainter(TrayIcons.renderTile(256).toComposeImageBitmap()) },
             state = rememberWindowState(size = DpSize(1280.dp, 800.dp), position = WindowPosition.PlatformDefault),
@@ -339,36 +370,11 @@ fun main() {
             window.minimumSize = Dimension(360, 240)
             LaunchedEffect(Unit) { logEvent("app_startup", mapOf("phase" to "window", "ms" to sinceJvmStart().toString())) }
             LaunchedEffect(view != null) { if (view != null) logEvent("app_startup", mapOf("phase" to "board", "ms" to sinceJvmStart().toString())) }
+            // A window that has just been shown comes to the front.
             LaunchedEffect(Unit) {
-                requests.collect { request ->
-                    when (request) {
-                        is WindowRequest.Open -> {
-                            windowVisible = true
-                            window.isMinimized = false
-                            window.toFront()
-                            window.requestFocus()
-                            showFeed = false
-                            showSettings = false
-                            request.cardId?.let { detail = detail.open(it) }
-                        }
-                        WindowRequest.ShowFeed -> {
-                            windowVisible = true
-                            window.isMinimized = false
-                            window.toFront()
-                            window.requestFocus()
-                            showSettings = false
-                            showFeed = true
-                        }
-                        WindowRequest.ShowSettings -> {
-                            windowVisible = true
-                            window.isMinimized = false
-                            window.toFront()
-                            window.requestFocus()
-                            showSettings = settingsClient != null
-                        }
-                        WindowRequest.Quit -> exitApplication()
-                    }
-                }
+                window.isMinimized = false
+                window.toFront()
+                window.requestFocus()
             }
             val openSettings = settingsClient?.let { { showSettings = true } }
             val feedAvailable = feed != null && connected
