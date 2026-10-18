@@ -256,12 +256,15 @@ fun main() {
         val pulseView by (pulse?.view ?: noPulse).collectAsState()
         var projectChoice by remember { mutableStateOf<String?>(null) }
         val connected = state == ConnectionState.Connected
-        val projectNames = view?.board?.cards?.mapNotNull { it.repo }?.distinct()?.map(::projectName)?.sorted().orEmpty()
+        val projectEntries = view?.board?.cards?.filter { it.repo != null }.orEmpty().groupBy { projectName(requireNotNull(it.repo)) }
+            .map { (name, cards) -> ProjectEntry(name, cards.size, cards.count { isWaitingForOwner(it.column) }) }
+            .sortedBy { it.name }
+        val projectNames = projectEntries.map { it.name }
         val shownProject = projectChoice?.takeIf { it in projectNames }
         val shownView = view?.let { full ->
             if (shownProject == null) full else full.copy(board = full.board.copy(cards = full.board.cards.filter { it.repo?.let(::projectName) == shownProject }))
         }
-        val projects = ProjectFilter(projectNames, shownProject) { projectChoice = it }
+        val projects = ProjectFilter(projectEntries, shownProject) { projectChoice = it }
         var showFeed by remember { mutableStateOf(false) }
         val hasTray = ports.tray !== NoTray
         // SHIPFLOOR_START_HIDDEN=1 starts the app in the tray with no window, for a login start.

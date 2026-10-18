@@ -198,7 +198,7 @@ class ScreenshotsTest {
         val density = if (chips) BoardDensity.CHIPS else BoardDensity.CARDS
         Box(Modifier.fillMaxSize().background(Tokens.ground)) {
             Column(Modifier.fillMaxSize()) {
-                AppBar(AppSection.BOARD, feedAvailable = true, onSelect = {}, onSettings = {}, onSearch = {}, theme = ThemeChoice.SYSTEM, onTheme = {})
+                AppBar(AppSection.BOARD, feedAvailable = true, onSelect = {}, onSettings = {}, onSearch = {}, theme = ThemeChoice.SYSTEM, onTheme = {}, projects = ProjectFilter(listOf(ProjectEntry("pickio", 114, 2), ProjectEntry("shipfloor", 128, 0)), "pickio") {})
                 Box(Modifier.weight(1f)) {
                     FactoryScreen(view = ScreenFixtures.view(inbox), pulse = ScreenFixtures.pulse(), connected = true, density = density)
                 }
