@@ -103,6 +103,20 @@ class ProjectRegistryTest {
     }
 
     @Test
+    fun `the example factory yml and price table of the docs are accepted`() {
+        val repo = aRepo("example")
+        val example = Files.readString(Path.of("..", "docs", "examples", "factory.yml"))
+        val prices = Files.readString(Path.of("..", "docs", "examples", "prices.yml"))
+        val source = FakeSource().also { it.put(repo, example) }
+
+        val registered = ProjectRegistry(source).register(repo)
+
+        assertThat(registered.layers.map { it.name }).containsExactly("app")
+        assertThat(registered.policies.deliveryMode).isEqualTo(DeliveryMode.PR_HANDOFF)
+        assertThat(PriceTable.parse(prices).priceOf("claude-sonnet-5-5")).isNotNull()
+    }
+
+    @Test
     fun `layer build test and ran are read from factory yml as tokens and text`() {
         val repo = aRepo("commands")
         val yaml = """
