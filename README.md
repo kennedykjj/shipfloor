@@ -25,19 +25,19 @@ Agentes refinam, implementam, validam e entregam. Gates determinísticos seguram
     <img src="docs/img/screens/board-dark.png" alt="O quadro do Shipfloor: duas raias de cinco colunas, com os cards que esperam o dono destacados em âmbar" width="960">
   </picture>
 </p>
-<p align="center"><sub>O quadro: duas raias, dez colunas. Âmbar marca só o que espera por você. Capturas geradas com dados de exemplo.</sub></p>
+<p align="center"><sub>O quadro: duas raias, dez colunas. Âmbar marca as decisões que esperam por você: Spec Review e Staged. Capturas geradas com dados de exemplo.</sub></p>
 
 ## Por que existe
 
 Quem toca muitos projetos sozinho, ou trabalha numa empresa com revisores e Jira, passa o dia entre contexto, spec, código, teste e PR. Agentes de código já fazem boa parte disso. Falta uma linha de montagem em volta deles: quem pode mover o quê, o que prova que um passo terminou, quanto custou e onde o humano decide.
 
-O Shipfloor é essa linha de montagem. Um daemon na sua máquina move cada card por dez colunas, chama o Claude Code em worktrees isoladas e só avança quando um gate passa. Gate é um script, e a palavra do agente não conta. Você recebe um aviso quando há spec para aprovar ou entrega para liberar. O resto roda sozinho, com o app fechado, dentro da janela de horário que você definir.
+O Shipfloor é essa linha de montagem. Comparado a rodar o `claude` à mão, ele acrescenta um worktree isolado por card, gates que decidem em vez do agente, custo medido por run, uma trilha de eventos que não se apaga e a sua decisão exatamente onde ela importa. Um daemon na sua máquina move cada card por dez colunas, chama o Claude Code em worktrees isoladas e só avança quando um gate passa. Gate é um script; o relato do agente não move o card. Você recebe um aviso quando há spec para aprovar ou entrega para liberar. O resto roda sozinho, com o app fechado, dentro da janela de horário que você definir.
 
 Ele nasceu para tirar o estado da fábrica da rede. A primeira versão guardava cada card num GitHub Project e estourou a cota de GraphQL. Aqui o card mora num SQLite local, e GitHub e Jira são tocados na importação, em marcos opcionais, no fechamento confirmado e na entrega (branch, PR, CI e merge pela Forge) ([a história completa](docs/context/decisions.md)).
 
 ## Como funciona
 
-Um card entra no Inbox e percorre duas raias. Você decide em três pontos: tirar o card do Inbox, aprovar a spec e liberar a entrega.
+Um card entra no Inbox e percorre duas raias. Você decide em três pontos: tirar o card do Inbox, aprovar a spec e liberar a entrega. O app destaca em âmbar as duas últimas.
 
 ```mermaid
 flowchart LR
@@ -66,14 +66,14 @@ flowchart LR
 
 O modo de entrega é definido por projeto: autônomo para projetos pessoais, entrega no PR para empresas com revisores obrigatórios.
 
-### O que a torna confiável
+### O que o torna confiável
 
 - **Gates são scripts.** Escopo, caminhos proibidos, build e teste por camada, plano de teste da spec e edição indevida de teste de aceitação são código determinístico, com teste próprio. O relato de um agente nunca move um card.
 - **Agente sem shell.** O agente lê o worktree só com `Read`, `Glob` e `Grep` e escreve só pelas ferramentas MCP do daemon, cada escrita dentro do escopo do papel: a QA grava testes, o engenheiro grava a própria camada, qualquer outro caminho é recusado. Ele não roda `git`, `gh` nem comando algum.
 - **Custo medido.** Cada run tem o custo calculado a partir da transcrição, contra uma tabela de preços, e aparece como estimativa. Há limite por card e por dia, e por padrão o dispatcher só sobe com um teto de custo configurado.
 - **Toda ação é um evento com ator.** Dono, agente (com papel), adaptador (com provedor) ou fábrica (com componente). O evento é gravado na mesma transação da mudança e nunca é alterado. A sua aprovação é um evento do dono, provado pelo token dele (`owner.token`), e nunca um comentário numa issue.
 - **Texto de fora é dado.** Issue, ticket e comentário entram por uma porta só, marcados como não confiáveis, e chegam ao agente como dado.
-- **Nada sai da máquina sem a sua autorização.** Push, PR e merge exigem um evento do dono ou uma política explícita do projeto que dispense a aprovação.
+- **Nada chega ao GitHub ou ao Jira sem a sua autorização.** Push, PR e merge exigem um evento do dono ou uma política explícita do projeto que dispense a aprovação. O código e a spec vão, sim, para o provedor do modelo a cada run.
 
 ### A vida de um card
 
@@ -156,10 +156,18 @@ Tema escuro e claro, com o âmbar reservado ao que espera pela sua decisão. O d
 
 Hoje o Shipfloor roda em **Linux** (testado em Fedora com GNOME e Wayland). macOS e Windows estão no roadmap.
 
-Você precisa de `git`, de `gh` autenticado, da CLI do `claude` já logada e, no projeto que a fábrica vai tocar, de um remote no GitHub. Java: o Gradle inicia com qualquer JDK 17+ e baixa sozinho o JDK 25 da compilação, mas o daemon roda com a JVM que o serviço enxergar, e ela precisa ser a 21 ou mais nova (defina `JAVA_HOME` no `service.env` se o `java` do sistema for mais antigo).
+Você precisa de:
+
+- `git` e `gh` autenticado;
+- a CLI do `claude` já logada;
+- no projeto que a fábrica vai tocar, um remote no GitHub e permissão de push na `main`;
+- um JDK 17+ para o Gradle iniciar (ele baixa sozinho o JDK 25 da compilação);
+- uma JVM 21+ visível ao serviço, porque o daemon roda com ela (defina `JAVA_HOME` no `service.env` se o `java` do sistema for mais antigo);
+- para o ícone na bandeja no GNOME, a extensão AppIndicator.
 
 ```bash
 git clone https://github.com/kennedykjj/shipfloor.git && cd shipfloor
+export SHIPFLOOR_HOME="$PWD"
 
 # 1. compila e roda todos os testes
 ./gradlew build
@@ -177,11 +185,11 @@ shipfloor doctor
 
 O serviço executa o daemon direto de `daemon/build/install/`, então um `./gradlew clean` o derruba até a próxima instalação.
 
-O dispatcher, que é a parte que de fato chama o agente, nasce **desligado**. Para ligá-lo você precisa de quatro coisas: a tabela de preços, o ambiente do serviço, o reinício e, no projeto, um teto de custo (mais abaixo).
+O dispatcher, que é a parte que de fato chama o agente, nasce **desligado**. Para ligá-lo (também dá com `dispatcher.enabled: true` no `factory.yml`) você precisa de quatro coisas: a tabela de preços, o ambiente do serviço, o reinício e, no projeto, um teto de custo (mais abaixo).
 
 ```bash
 # a. a tabela de preços (modelo e valores de exemplo em docs/examples/prices.yml)
-cp docs/examples/prices.yml ~/.local/share/shipfloor/prices.yml
+cp "$SHIPFLOOR_HOME/docs/examples/prices.yml" ~/.local/share/shipfloor/prices.yml
 
 # b. o serviço enxergando git, gh, java e claude (o systemd usa um PATH mínimo)
 cat >> ~/.config/shipfloor/service.env <<EOF
@@ -189,15 +197,16 @@ SHIPFLOOR_DISPATCHER_ENABLED=true
 PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin
 EOF
 
-# c. reiniciar o serviço
+# c. reiniciar o serviço e conferir
 systemctl --user restart shipfloor.service
+journalctl --user -u shipfloor.service | grep dispatcher_state    # deve mostrar state=enabled
 ```
 
-Agora o projeto. O daemon lê o `.shipfloor/factory.yml` **da `main`**, então ele precisa estar commitado lá antes do registro. O [`docs/examples/factory.yml`](docs/examples/factory.yml) é um ponto de partida mínimo: projeto, contexto, caminhos proibidos, modo de entrega, teto de custo e as camadas com seus comandos de build e teste. O dispatcher não lança sem o teto de custo.
+Agora o projeto. O daemon lê o `.shipfloor/factory.yml` **da `main`**, então ele precisa estar commitado lá antes do registro. O [`docs/examples/factory.yml`](docs/examples/factory.yml) é um ponto de partida mínimo: projeto, contexto, caminhos proibidos, modo de entrega, teto de custo e as camadas com seus comandos de build e teste. O dispatcher não lança sem o teto de custo. Se você salvar as Configurações do app, os limites de lá substituem os do `factory.yml`, e deixar "sem limite" ali desliga o dispatcher.
 
 ```bash
 cd ~/git/meu-projeto
-mkdir -p .shipfloor && cp ~/git/shipfloor/docs/examples/factory.yml .shipfloor/factory.yml
+mkdir -p .shipfloor && cp "$SHIPFLOOR_HOME/docs/examples/factory.yml" .shipfloor/factory.yml
 # ajuste nome, repo e camadas, depois:
 git add .shipfloor && git commit -m "chore: registra o projeto no Shipfloor" && git push origin main
 
@@ -212,7 +221,7 @@ Com mais de um projeto registrado, o `card create` da CLI ainda não escolhe o p
 Abra o app:
 
 ```bash
-cd ~/git/shipfloor
+cd "$SHIPFLOOR_HOME"
 ./gradlew :app:run                    # roda direto do código
 ./gradlew :app:packageDeb             # ou :app:packageRpm, para instalar como pacote
 ```
@@ -223,7 +232,7 @@ Se algo não sobe, `shipfloor doctor` mostra o que falta e `journalctl --user -u
 
 ## Estado do projeto
 
-O Shipfloor é a segunda versão da fábrica. A primeira, a V0, está arquivada em [kennedykjj/shipfloor-legacy](https://github.com/kennedykjj/shipfloor-legacy) e construiu esta card a card até a fase 5. O código da V0 não foi copiado, só virou especificação ([o que a V0 fazia mal](docs/context/gargalos-da-v0.md)). O projeto é usado pelo próprio autor e muda rápido.
+O Shipfloor é a segunda versão da fábrica. A primeira, a V0, está arquivada em [kennedykjj/shipfloor-legacy](https://github.com/kennedykjj/shipfloor-legacy) e construiu esta versão card a card até a fase 5. O código da V0 não foi copiado, só virou especificação ([o que a V0 fazia mal](docs/context/gargalos-da-v0.md)). O projeto é usado pelo próprio autor e muda rápido.
 
 Em 18 de outubro de 2026, três dias depois do primeiro commit: 8 módulos Kotlin, 81 arquivos de teste e 128 issues, 124 delas fechadas. O redesenho visual do app (tema, quadro em duas raias, modais, seletor de projeto) foi feito à mão, com o autor.
 
@@ -238,7 +247,7 @@ Em 18 de outubro de 2026, três dias depois do primeiro commit: 8 módulos Kotli
 | 6 | App desktop: quadro, card, feed, configurações, bandeja | concluída |
 | 7 | Assistente da fábrica: estados, texto com personalidade e duas skins | concluída, menos a decisão do cartum (#77, adiada) |
 | 8 | Portes e onboarding: transporte TCP, `init` com prontidão, rascunho assistido e CLI nativa estão prontos; serviço, pacotes e atualizador para macOS e Windows ficaram adiados | parcial |
-| 9 | Fluxo corporativo: Jira, DoR, outbox, auditoria, Bedrock e Vertex | concluída |
+| 9 | Empresa: Jira, DoR, outbox, auditoria, Bedrock e Vertex | concluída |
 
 "Concluída" quer dizer que as issues da fase estão fechadas, salvo as exceções ditas na própria linha; o teste de saída de cada fase está descrito no [roadmap](docs/context/roadmap.md). Fora do escopo, de propósito: ser um board de time, substituir o Jira, sincronizar continuamente com ferramentas externas e deixar um agente decidir sozinho o que vai para produção.
 

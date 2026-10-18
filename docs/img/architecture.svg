@@ -69,9 +69,9 @@
   <path class="line" d="M555 652V696" marker-end="url(#a)"/>
   <path class="line" d="M800 652V696" marker-end="url(#a)"/>
   <path class="line" d="M1045 652V696" marker-end="url(#a)"/>
-  <text class="e" x="60" y="716">FORA DA MÁQUINA</text><text class="m" x="60" y="738">só com autorização do dono</text><text class="m" x="60" y="756">ou política explícita do projeto</text>
+  <text class="e" x="60" y="716">FORA DA MÁQUINA</text><text class="m" x="60" y="738">GitHub e Jira: só com autorização</text><text class="m" x="60" y="756">do dono ou política do projeto</text>
   <rect class="in" x="440" y="700" width="230" height="44" rx="10" fill="none" stroke-dasharray="5 4"/><text class="s" x="555" y="727" text-anchor="middle">Jira · GitHub Issues</text>
   <rect class="in" x="685" y="700" width="230" height="44" rx="10" fill="none" stroke-dasharray="5 4"/><text class="s" x="800" y="727" text-anchor="middle">GitHub · CI</text>
-  <rect class="in" x="930" y="700" width="230" height="44" rx="10" fill="none" stroke-dasharray="5 4"/><text class="s" x="1045" y="727" text-anchor="middle">Modelos dos agentes</text>
+  <rect class="in" x="930" y="700" width="230" height="44" rx="10" fill="none" stroke-dasharray="5 4"/><text class="s" x="1045" y="727" text-anchor="middle">Provedor do modelo</text>
   <text class="m" x="450" y="776">módulos: core ← store, ports ← adapters ← daemon (verificado pelo build)</text>
 </svg>

@@ -23,6 +23,7 @@ cost:
 
 # Uma entrada por camada do projeto. `build` e `test` rodam dentro de `path`;
 # `{selector}` vira o teste que o card quer rodar; `ran` é o texto que prova que algum teste rodou.
+# Com Gradle, o texto PASSED só aparece se o projeto pedir: tasks.test { testLogging { events("passed") } }
 layers:
   - name: app
     path: ./
