@@ -63,7 +63,7 @@ object ScreenFixtures {
         column = "SPEC_REVIEW",
         spec = SpecView(
             "ready",
-            "## Problema\n\nO app não sabe quando há versão nova do daemon.\n\n## Critérios de aceitação\n\n" +
+            "Problema\n\nO app não sabe quando há versão nova do daemon.\n\nCritérios de aceitação\n\n" +
                 "1. Dado que há versão nova, quando o app abre, então avisa o dono.\n" +
                 "2. Dado que o dono recusa, então o aviso não volta no mesmo dia.",
         ),

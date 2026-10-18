@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/img/social-preview.png" alt="Shipfloor: uma fábrica de software" width="520">
+<img src="docs/img/social-preview.png" alt="Shipfloor: a software factory" width="520">
 
 # Shipfloor
 
@@ -31,9 +31,9 @@ Agentes refinam, implementam, validam e entregam. Gates determinísticos seguram
 
 Quem toca muitos projetos sozinho, ou trabalha numa empresa com revisores e Jira, passa o dia entre contexto, spec, código, teste e PR. Agentes de código já fazem boa parte disso. Falta uma linha de montagem em volta deles: quem pode mover o quê, o que prova que um passo terminou, quanto custou e onde o humano decide.
 
-O Shipfloor é essa linha de montagem. Comparado a rodar o `claude` à mão, ele acrescenta um worktree isolado por card, custo medido por run, uma trilha de eventos que não se apaga e a sua decisão exatamente onde ela importa. Um daemon na sua máquina move cada card por dez colunas, chama o Claude Code em worktrees isolados e só avança quando um gate passa. Gate é um script; o relato do agente não move o card. Você recebe um aviso quando há spec para aprovar ou entrega para liberar. O resto roda sozinho, com o app fechado, dentro da janela de horário que você definir.
+O Shipfloor é essa linha de montagem. Um daemon na sua máquina move cada card por dez colunas, chama o Claude Code em worktrees isolados e só avança quando um gate, que é um script, passa. Comparado a rodar o `claude` à mão, ele acrescenta custo medido por run, uma trilha de eventos que não se apaga e a sua decisão exatamente onde ela importa. Você recebe um aviso quando há spec para aprovar ou entrega para liberar. O resto roda sozinho, com o app fechado, dentro da janela de horário que você definir.
 
-Ele nasceu para tirar o estado da fábrica da rede. A primeira versão guardava cada card num GitHub Project e estourou a cota de GraphQL. Aqui o card mora num SQLite local, e GitHub e Jira são tocados na importação, em marcos opcionais, no fechamento confirmado e na entrega (branch, PR, CI e merge pela Forge) ([a história completa](docs/context/decisions.md)).
+Ele nasceu para tirar o estado da fábrica da rede. A primeira versão guardava cada card num GitHub Project e estourou a cota de GraphQL. Aqui o card mora num SQLite local, e GitHub e Jira só são tocados na importação, no fechamento e na entrega. [A história completa](docs/context/decisions.md).
 
 ## Como funciona
 
@@ -196,7 +196,7 @@ cp "$SHIPFLOOR_HOME/docs/examples/prices.yml" ~/.local/share/shipfloor/prices.ym
 # b. o serviço enxergando git, gh, java e claude (o systemd usa um PATH mínimo)
 cat >> ~/.config/shipfloor/service.env <<EOF
 SHIPFLOOR_DISPATCHER_ENABLED=true
-PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin
+PATH=$(dirname "$(command -v claude)"):$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin
 EOF
 
 # c. reiniciar o serviço
@@ -214,7 +214,7 @@ git add .shipfloor && git commit -m "chore: registra o projeto no Shipfloor" && 
 shipfloor init .                                       # registra e mede o contexto (PRODUCT.md, ARCHITECTURE.md, DESIGN.md)
 journalctl --user -u shipfloor.service | grep dispatcher_state   # state=enabled; sem projeto registrado não aparece nada
 shipfloor card create "Exportar eventos do dia em CSV"
-shipfloor card list                                    # copie o id do card
+shipfloor card list                                    # a primeira coluna é o id; copie o do seu card
 shipfloor card move <id> ready-for-refinement          # só o dono tira o card do Inbox
 ```
 
@@ -236,7 +236,7 @@ Se algo não sobe, `shipfloor doctor` mostra o que falta e `journalctl --user -u
 
 O Shipfloor é a segunda versão da fábrica. A primeira, a V0, está arquivada em [kennedykjj/shipfloor-legacy](https://github.com/kennedykjj/shipfloor-legacy) e construiu esta versão card a card até a fase 5. O código da V0 não foi copiado, só virou especificação ([o que a V0 fazia mal](docs/context/gargalos-da-v0.md)). O projeto é usado pelo próprio autor e muda rápido.
 
-Em 18 de outubro de 2026, três dias depois do primeiro commit: 8 módulos Kotlin, 81 arquivos de teste e 128 issues, 124 delas fechadas. O redesenho visual do app (tema, quadro em duas raias, modais, seletor de projeto) foi feito à mão, com o autor. Das 163 PRs já mergeadas, as da fase 6 (por exemplo [#284](https://github.com/kennedykjj/shipfloor/pull/284), [#286](https://github.com/kennedykjj/shipfloor/pull/286) e [#287](https://github.com/kennedykjj/shipfloor/pull/287)) saíram da fábrica sob gates, com o CI como juiz.
+Em 18 de outubro de 2026, três dias depois do primeiro commit: 8 módulos Kotlin, 81 arquivos de teste e 128 issues, 124 delas fechadas. O redesenho visual do app (tema, quadro em duas raias, modais, seletor de projeto) foi feito à mão, com o autor. Das 163 PRs já mergeadas, a [#284](https://github.com/kennedykjj/shipfloor/pull/284) e a [#286](https://github.com/kennedykjj/shipfloor/pull/286), da fase 6, saíram da fábrica sob gates, com o CI como juiz.
 
 | Fase | Tema | Situação |
 |---|---|---|
