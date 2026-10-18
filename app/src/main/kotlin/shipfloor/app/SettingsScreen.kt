@@ -5,10 +5,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -53,12 +55,23 @@ import shipfloor.core.NotificationType
 import shipfloor.core.WorkHoursSetting
 
 private const val SAVED_NOTICE_MILLIS = 5_000L
+private val WIDE_LAYOUT = 900.dp
 private val TIME_TEXT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 private val DEFAULT_HOURS = WorkHoursSetting(
     days = setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY),
     start = LocalTime.of(9, 0),
     end = LocalTime.of(18, 0),
     zone = ZoneId.systemDefault().id,
+)
+
+/** The app's own preferences, shown beside the factory's: they live on this machine, not in the daemon. */
+class AppSettings(
+    val theme: ThemeChoice,
+    val onTheme: (ThemeChoice) -> Unit,
+    val density: BoardDensity,
+    val onDensity: (BoardDensity) -> Unit,
+    val closeToTray: Boolean,
+    val onCloseToTray: (Boolean) -> Unit,
 )
 
 /** What the screen shows: reading, unreadable, or the editable draft. */
@@ -71,7 +84,7 @@ private sealed interface Loaded {
 }
 
 @Composable
-fun SettingsScreen(client: SettingsClient, onBack: () -> Unit) {
+fun SettingsScreen(client: SettingsClient, app: AppSettings, onBack: () -> Unit) {
     var loaded by remember { mutableStateOf<Loaded>(Loaded.Reading) }
     var saving by remember { mutableStateOf(false) }
     var justSaved by remember { mutableStateOf(false) }
@@ -130,13 +143,14 @@ fun SettingsScreen(client: SettingsClient, onBack: () -> Unit) {
                     loaded = Loaded.Ready(state.draft.discard())
                 },
                 onSave = { save(state.draft) },
+                app = app,
             )
         }
     }
 }
 
 @Composable
-private fun Editor(
+internal fun Editor(
     state: SettingsDraft,
     saving: Boolean,
     justSaved: Boolean,
@@ -145,6 +159,7 @@ private fun Editor(
     onChange: (FactorySettings) -> Unit,
     onDiscard: () -> Unit,
     onSave: () -> Unit,
+    app: AppSettings,
 ) {
     val draft = state.draft
     val enabled = !saving
@@ -154,107 +169,130 @@ private fun Editor(
     fun input(field: String, message: String?): Map<String, String> =
         if (message == null) badInputs - field else badInputs + (field to message)
 
+    val factory: @Composable () -> Unit = {
+        Section(Texts.GROUP_FACTORY) {
+            SettingRow(
+                label = Texts.POOL_LABEL,
+                description = Texts.POOL_DESCRIPTION,
+                error = issues["poolSize"],
+                changed = draft.poolSize != state.saved.poolSize,
+            ) {
+                Stepper(draft.poolSize, enabled) { onChange(draft.copy(poolSize = it)) }
+            }
+            val hours = draft.workHours
+            SettingRow(
+                label = Texts.HOURS_LABEL,
+                description = Texts.HOURS_DESCRIPTION,
+                error = issues["workHours"] ?: issues["workHours.zone"],
+                changed = hours != state.saved.workHours,
+            ) {
+                Switch(hours != null, enabled) { onChange(draft.copy(workHours = if (it) DEFAULT_HOURS else null)) }
+            }
+            if (hours != null) {
+                SettingRow(label = Texts.HOURS_START, description = null, error = badInputs["workHours.start"], changed = false) {
+                    TimeField(hours.start, enabled, "workHours.start", { onBadInputs(input("workHours.start", it)) }) { t ->
+                        if (t != null) onChange(draft.copy(workHours = hours.copy(start = t)))
+                    }
+                }
+                SettingRow(label = Texts.HOURS_END, description = null, error = badInputs["workHours.end"], changed = false) {
+                    TimeField(hours.end, enabled, "workHours.end", { onBadInputs(input("workHours.end", it)) }) { t ->
+                        if (t != null) onChange(draft.copy(workHours = hours.copy(end = t)))
+                    }
+                }
+                SettingRow(label = Texts.HOURS_DAYS, description = null, error = issues["workHours.days"], changed = false) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        DayOfWeek.entries.forEachIndexed { index, day ->
+                            val on = day in hours.days
+                            Chip(Texts.DAY_NAMES[index], on, enabled) {
+                                onChange(draft.copy(workHours = hours.copy(days = if (on) hours.days - day else hours.days + day)))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Section(Texts.GROUP_COST) {
+            SettingRow(
+                label = Texts.COST_CARD,
+                description = null,
+                error = badInputs["cost.perCardUsd"] ?: issues["cost.perCardUsd"],
+                changed = draft.cost.perCardUsd != state.saved.cost.perCardUsd,
+            ) {
+                AmountField(draft.cost.perCardUsd, enabled, { onBadInputs(input("cost.perCardUsd", it)) }) {
+                    onChange(draft.copy(cost = draft.cost.copy(perCardUsd = it)))
+                }
+            }
+            SettingRow(
+                label = Texts.COST_DAY,
+                description = null,
+                error = badInputs["cost.perDayUsd"] ?: issues["cost.perDayUsd"],
+                changed = draft.cost.perDayUsd != state.saved.cost.perDayUsd,
+            ) {
+                AmountField(draft.cost.perDayUsd, enabled, { onBadInputs(input("cost.perDayUsd", it)) }) {
+                    onChange(draft.copy(cost = draft.cost.copy(perDayUsd = it)))
+                }
+            }
+        }
+    }
+    val notices: @Composable () -> Unit = {
+        Section(Texts.GROUP_NOTIFICATIONS) {
+            NotificationType.entries.forEach { type ->
+                val on = type in draft.notifications.enabled
+                SettingRow(
+                    label = Texts.notificationLabel(type),
+                    description = null,
+                    error = null,
+                    changed = on != (type in state.saved.notifications.enabled),
+                ) {
+                    Switch(on, enabled) {
+                        val next = if (it) draft.notifications.enabled + type else draft.notifications.enabled - type
+                        onChange(draft.copy(notifications = draft.notifications.copy(enabled = next)))
+                    }
+                }
+            }
+            SettingRow(
+                label = Texts.QUIET_LABEL,
+                description = Texts.QUIET_DESCRIPTION,
+                error = badInputs["notifications.quietStart"] ?: badInputs["notifications.quietEnd"],
+                changed = draft.notifications.quietStart != state.saved.notifications.quietStart ||
+                    draft.notifications.quietEnd != state.saved.notifications.quietEnd,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TimeField(draft.notifications.quietStart, enabled, "notifications.quietStart", { onBadInputs(input("notifications.quietStart", it)) }, optional = true) {
+                        onChange(draft.copy(notifications = draft.notifications.copy(quietStart = it)))
+                    }
+                    TimeField(draft.notifications.quietEnd, enabled, "notifications.quietEnd", { onBadInputs(input("notifications.quietEnd", it)) }, optional = true) {
+                        onChange(draft.copy(notifications = draft.notifications.copy(quietEnd = it)))
+                    }
+                }
+            }
+        }
+        Section(Texts.GROUP_APPEARANCE) {
+            SettingRow(Texts.THEME_LABEL, null, null, false) { ThemeSwitch(app.theme, app.onTheme) }
+            SettingRow(Texts.DENSITY_LABEL, null, null, false) {
+                TextSegmented(listOf(Texts.DENSITY_CARDS, Texts.DENSITY_CHIPS), app.density.ordinal) { app.onDensity(BoardDensity.entries[it]) }
+            }
+        }
+    }
+    val application: @Composable () -> Unit = {
+        Section(Texts.GROUP_APP) {
+            SettingRow(Texts.TRAY_LABEL, Texts.TRAY_DESCRIPTION, null, false) { Switch(app.closeToTray, true, app.onCloseToTray) }
+        }
+    }
+
     Column(Modifier.fillMaxSize()) {
-        Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Column(Modifier.widthIn(max = 720.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Group(Texts.GROUP_POOL) {
-                    SettingRow(
-                        label = Texts.POOL_LABEL,
-                        description = Texts.POOL_DESCRIPTION,
-                        error = issues["poolSize"],
-                        changed = draft.poolSize != state.saved.poolSize,
-                    ) {
-                        Stepper(draft.poolSize, enabled) { onChange(draft.copy(poolSize = it)) }
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            if (maxWidth >= WIDE_LAYOUT) {
+                Row(Modifier.fillMaxSize().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+                    listOf(factory, notices, application).forEach { content ->
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) { content() }
                     }
                 }
-                Group(Texts.GROUP_HOURS) {
-                    val hours = draft.workHours
-                    SettingRow(
-                        label = Texts.HOURS_LABEL,
-                        description = Texts.HOURS_DESCRIPTION,
-                        error = issues["workHours"] ?: issues["workHours.zone"],
-                        changed = hours != state.saved.workHours,
-                    ) {
-                        Switch(hours != null, enabled) { onChange(draft.copy(workHours = if (it) DEFAULT_HOURS else null)) }
-                    }
-                    SettingRow(label = Texts.HOURS_START, description = null, error = badInputs["workHours.start"], changed = false) {
-                        TimeField(hours?.start, enabled && hours != null, "workHours.start", { onBadInputs(input("workHours.start", it)) }) { t ->
-                            if (hours != null && t != null) onChange(draft.copy(workHours = hours.copy(start = t)))
-                        }
-                    }
-                    SettingRow(label = Texts.HOURS_END, description = null, error = badInputs["workHours.end"], changed = false) {
-                        TimeField(hours?.end, enabled && hours != null, "workHours.end", { onBadInputs(input("workHours.end", it)) }) { t ->
-                            if (hours != null && t != null) onChange(draft.copy(workHours = hours.copy(end = t)))
-                        }
-                    }
-                    SettingRow(label = Texts.GROUP_HOURS, description = null, error = issues["workHours.days"], changed = false) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            DayOfWeek.entries.forEachIndexed { index, day ->
-                                val on = hours?.days?.contains(day) == true
-                                Chip(Texts.DAY_NAMES[index], on, enabled && hours != null) {
-                                    hours?.let { onChange(draft.copy(workHours = it.copy(days = if (on) it.days - day else it.days + day))) }
-                                }
-                            }
-                        }
-                    }
-                }
-                Group(Texts.GROUP_COST) {
-                    SettingRow(
-                        label = Texts.COST_CARD,
-                        description = Texts.COST_DESCRIPTION,
-                        error = badInputs["cost.perCardUsd"] ?: issues["cost.perCardUsd"],
-                        changed = draft.cost.perCardUsd != state.saved.cost.perCardUsd,
-                    ) {
-                        AmountField(draft.cost.perCardUsd, enabled, { onBadInputs(input("cost.perCardUsd", it)) }) {
-                            onChange(draft.copy(cost = draft.cost.copy(perCardUsd = it)))
-                        }
-                    }
-                    SettingRow(
-                        label = Texts.COST_DAY,
-                        description = Texts.COST_DESCRIPTION,
-                        error = badInputs["cost.perDayUsd"] ?: issues["cost.perDayUsd"],
-                        changed = draft.cost.perDayUsd != state.saved.cost.perDayUsd,
-                    ) {
-                        AmountField(draft.cost.perDayUsd, enabled, { onBadInputs(input("cost.perDayUsd", it)) }) {
-                            onChange(draft.copy(cost = draft.cost.copy(perDayUsd = it)))
-                        }
-                    }
-                }
-                Group(Texts.GROUP_NOTIFICATIONS) {
-                    Label(Texts.NOTIFICATIONS_NOTE, 13, FontWeight.Normal, Tokens.muted)
-                    NotificationType.entries.forEach { type ->
-                        val on = type in draft.notifications.enabled
-                        SettingRow(
-                            label = Texts.notificationLabel(type),
-                            description = null,
-                            error = null,
-                            changed = on != (type in state.saved.notifications.enabled),
-                        ) {
-                            Switch(on, enabled) {
-                                val next = if (it) draft.notifications.enabled + type else draft.notifications.enabled - type
-                                onChange(draft.copy(notifications = draft.notifications.copy(enabled = next)))
-                            }
-                        }
-                    }
-                    SettingRow(
-                        label = Texts.QUIET_LABEL,
-                        description = Texts.QUIET_DESCRIPTION,
-                        error = badInputs["notifications.quietStart"] ?: badInputs["notifications.quietEnd"],
-                        changed = draft.notifications.quietStart != state.saved.notifications.quietStart ||
-                            draft.notifications.quietEnd != state.saved.notifications.quietEnd,
-                    ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TimeField(draft.notifications.quietStart, enabled, "notifications.quietStart", { onBadInputs(input("notifications.quietStart", it)) }, optional = true) {
-                                onChange(draft.copy(notifications = draft.notifications.copy(quietStart = it)))
-                            }
-                            TimeField(draft.notifications.quietEnd, enabled, "notifications.quietEnd", { onBadInputs(input("notifications.quietEnd", it)) }, optional = true) {
-                                onChange(draft.copy(notifications = draft.notifications.copy(quietEnd = it)))
-                            }
-                        }
-                    }
+            } else {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
+                    factory()
+                    notices()
+                    application()
                 }
             }
         }
@@ -289,16 +327,11 @@ private fun Editor(
     }
 }
 
+/** A section of plain rows under a small heading; the rows carry their own hairlines. */
 @Composable
-private fun Group(title: String, content: @Composable () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth()
-            .background(Tokens.panel, RoundedCornerShape(16.dp))
-            .border(1.dp, Tokens.edge, RoundedCornerShape(16.dp))
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Label(title, 17, FontWeight.SemiBold, Tokens.text)
+private fun Section(title: String, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Box(Modifier.padding(bottom = 6.dp)) { Label(title, 12, FontWeight.SemiBold, Tokens.faint) }
         content()
     }
 }
@@ -306,13 +339,14 @@ private fun Group(title: String, content: @Composable () -> Unit) {
 /** A setting row: label and description on the left, the control on the right, the field error below. */
 @Composable
 private fun SettingRow(label: String, description: String?, error: String?, changed: Boolean, control: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.edge))
         Row(
-            Modifier.fillMaxWidth(),
+            Modifier.fillMaxWidth().padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Column(Modifier.weight(1f).widthIn(max = 448.dp)) {
+            Column(Modifier.weight(1f)) {
                 Label(label, 14, FontWeight.Normal, if (changed) Tokens.text else Tokens.soft)
                 description?.let { Label(it, 13, FontWeight.Normal, Tokens.muted) }
             }
@@ -343,7 +377,6 @@ private fun Switch(on: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Label(if (on) Texts.ON else Texts.OFF, 13, FontWeight.Normal, if (enabled) Tokens.soft else Tokens.faint)
         Box(
             Modifier.widthIn(min = 36.dp).heightIn(min = 20.dp)
                 .background(if (on) Tokens.text else Tokens.panel, RoundedCornerShape(10.dp))
@@ -385,13 +418,15 @@ private fun Banner(text: String, onRetry: (() -> Unit)?) {
 
 /** A boxed text field. [onValid] gets each parsed value; [onInvalid] gets the message, or null once the text is valid. */
 @Composable
-private fun Field(text: String, enabled: Boolean, family: FontFamily, prefix: String?, suffix: String?, onText: (String) -> Unit) {
+private fun Field(text: String, enabled: Boolean, family: FontFamily, prefix: String?, suffix: String?, placeholder: String? = null, onText: (String) -> Unit) {
     Row(
         Modifier.border(1.dp, Tokens.edge, RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp).widthIn(min = 80.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         prefix?.let { Label(it, 13, FontWeight.Normal, Tokens.muted) }
+        Box {
+            if (text.isEmpty() && placeholder != null) Label(placeholder, 14, FontWeight.Normal, Tokens.faint)
         BasicTextField(
             value = text,
             onValueChange = onText,
@@ -401,6 +436,7 @@ private fun Field(text: String, enabled: Boolean, family: FontFamily, prefix: St
             textStyle = TextStyle(fontFamily = family, fontSize = 14.sp, color = if (enabled) Tokens.text else Tokens.faint),
             modifier = Modifier.widthIn(min = 56.dp),
         )
+        }
         suffix?.let { Label(it, 13, FontWeight.Normal, Tokens.muted) }
     }
 }
@@ -436,7 +472,7 @@ private fun TimeField(
 @Composable
 private fun AmountField(value: BigDecimal?, enabled: Boolean, onInvalid: (String?) -> Unit, onValid: (BigDecimal?) -> Unit) {
     var text by remember(value) { mutableStateOf(value?.toPlainString().orEmpty()) }
-    Field(text, enabled, mono, Texts.COST_PREFIX, Texts.COST_SUFFIX) { typed ->
+    Field(text, enabled, mono, Texts.COST_PREFIX, Texts.COST_SUFFIX, Texts.NO_LIMIT) { typed ->
         text = typed
         if (typed.isBlank()) {
             onInvalid(null)

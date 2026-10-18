@@ -262,6 +262,7 @@ fun main() {
         var detail by remember { mutableStateOf(DetailModalState()) }
         var listColumn by remember { mutableStateOf<BoardColumn?>(null) }
         var density by remember { mutableStateOf(BoardDensity.CARDS) }
+        var closeToTray by remember { mutableStateOf(TrayPreference.load()) }
         val escapeClaim = remember { EscapeClaim() }
         var palette by remember { mutableStateOf(PaletteState()) }
         var themeChoice by remember { mutableStateOf(ThemePreference.load()) }
@@ -361,7 +362,7 @@ fun main() {
         }
         if (windowVisible) Window(
             // The X hides the window and leaves the app in the tray; without a tray there would be no way back.
-            onCloseRequest = { if (hasTray) windowVisible = false else exitApplication() },
+            onCloseRequest = { if (hasTray && closeToTray) windowVisible = false else exitApplication() },
             title = Texts.TITLE,
             icon = remember { BitmapPainter(TrayIcons.renderTile(256).toComposeImageBitmap()) },
             state = rememberWindowState(size = DpSize(1280.dp, 800.dp), position = WindowPosition.PlatformDefault),
@@ -397,7 +398,21 @@ fun main() {
             CompositionLocalProvider(LocalEscapeClaim provides escapeClaim) {
             Box(Modifier.fillMaxSize()) {
                 when {
-                    showSettings && settingsClient != null -> SettingsScreen(settingsClient, onBack = { showSettings = false })
+                    showSettings && settingsClient != null -> SettingsScreen(
+                        settingsClient,
+                        AppSettings(
+                            theme = themeChoice,
+                            onTheme = ::chooseTheme,
+                            density = density,
+                            onDensity = { density = it },
+                            closeToTray = closeToTray,
+                            onCloseToTray = {
+                                closeToTray = it
+                                TrayPreference.save(it)
+                            },
+                        ),
+                        onBack = { showSettings = false },
+                    )
                     feed != null && feedAvailable && showFeed -> ScreenWithTabs(AppSection.FEED, ::selectSection, feedAvailable, openSettings, ::openPalette, themeChoice, ::chooseTheme) {
                         val feedState by feed.client.state.collectAsState()
                         val scope = rememberCoroutineScope()
