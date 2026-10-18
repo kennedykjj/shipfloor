@@ -13,6 +13,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -75,9 +86,7 @@ fun AppBar(
             if (onSettings != null) NavItem(Texts.NAV_SETTINGS, AppIcon.GEAR, selected = false, onClick = onSettings)
         }
         if (projects.names.size > 1) {
-            TextSegmented(listOf(Texts.PROJECT_ALL) + projects.names, projects.names.indexOf(projects.selected) + 1) {
-                projects.onSelect(projects.names.getOrNull(it - 1))
-            }
+            ProjectDropdown(projects)
         }
         Spacer(Modifier.weight(1f))
         SearchButton(onSearch)
@@ -89,6 +98,63 @@ fun AppBar(
 class ProjectFilter(val names: List<String>, val selected: String?, val onSelect: (String?) -> Unit) {
     companion object {
         val NONE = ProjectFilter(emptyList(), null) {}
+    }
+}
+
+/** The project picker: a button with the current choice that opens a scrollable list, so ten projects fit as well as two. */
+@Composable
+private fun ProjectDropdown(projects: ProjectFilter) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            modifier = Modifier
+                .height(32.dp)
+                .border(1.dp, if (open) Tokens.edgeHi else Tokens.edge, RoundedCornerShape(6.dp))
+                .clickable(role = Role.DropdownList) { open = !open }
+                .padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            BasicText(
+                projects.selected ?: Texts.PROJECT_ALL,
+                style = TextStyle(fontFamily = sans, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Tokens.text),
+            )
+            IconGlyph(AppIcon.ARROW_DOWN, Tokens.faint)
+        }
+        if (open) {
+            Popup(alignment = Alignment.TopStart, offset = IntOffset(0, with(LocalDensity.current) { 36.dp.roundToPx() }), onDismissRequest = { open = false }, properties = PopupProperties(focusable = true)) {
+                Column(
+                    Modifier.width(220.dp).heightIn(max = 320.dp)
+                        .background(Tokens.panel, RoundedCornerShape(8.dp))
+                        .border(1.dp, Tokens.edgeHi, RoundedCornerShape(8.dp))
+                        .verticalScroll(rememberScrollState())
+                        .padding(4.dp),
+                ) {
+                    (listOf<String?>(null) + projects.names).forEach { name ->
+                        val on = name == projects.selected
+                        Row(
+                            Modifier.fillMaxWidth().height(32.dp)
+                                .background(if (on) Tokens.raise else Color.Transparent, RoundedCornerShape(6.dp))
+                                .clickable(role = Role.Button) {
+                                    projects.onSelect(name)
+                                    open = false
+                                }
+                                .padding(horizontal = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            BasicText(
+                                name ?: Texts.PROJECT_ALL,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = if (on) Tokens.text else Tokens.soft),
+                            )
+                            if (on) IconGlyph(AppIcon.CHECK, Tokens.text)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
