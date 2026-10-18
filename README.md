@@ -31,7 +31,7 @@ Agentes refinam, implementam, validam e entregam. Gates determinísticos seguram
 
 Quem toca muitos projetos sozinho, ou trabalha numa empresa com revisores e Jira, passa o dia entre contexto, spec, código, teste e PR. Agentes de código já fazem boa parte disso. Falta uma linha de montagem em volta deles: quem pode mover o quê, o que prova que um passo terminou, quanto custou e onde o humano decide.
 
-O Shipfloor é essa linha de montagem. Comparado a rodar o `claude` à mão, ele acrescenta um worktree isolado por card, gates que decidem em vez do agente, custo medido por run, uma trilha de eventos que não se apaga e a sua decisão exatamente onde ela importa. Um daemon na sua máquina move cada card por dez colunas, chama o Claude Code em worktrees isoladas e só avança quando um gate passa. Gate é um script; o relato do agente não move o card. Você recebe um aviso quando há spec para aprovar ou entrega para liberar. O resto roda sozinho, com o app fechado, dentro da janela de horário que você definir.
+O Shipfloor é essa linha de montagem. Comparado a rodar o `claude` à mão, ele acrescenta um worktree isolado por card, custo medido por run, uma trilha de eventos que não se apaga e a sua decisão exatamente onde ela importa. Um daemon na sua máquina move cada card por dez colunas, chama o Claude Code em worktrees isolados e só avança quando um gate passa. Gate é um script; o relato do agente não move o card. Você recebe um aviso quando há spec para aprovar ou entrega para liberar. O resto roda sozinho, com o app fechado, dentro da janela de horário que você definir.
 
 Ele nasceu para tirar o estado da fábrica da rede. A primeira versão guardava cada card num GitHub Project e estourou a cota de GraphQL. Aqui o card mora num SQLite local, e GitHub e Jira são tocados na importação, em marcos opcionais, no fechamento confirmado e na entrega (branch, PR, CI e merge pela Forge) ([a história completa](docs/context/decisions.md)).
 
@@ -51,10 +51,12 @@ flowchart LR
     end
     E --> F
     classDef owner fill:#f2c230,stroke:#b8860b,color:#1b1d21,font-weight:bold;
-    class A,D,H owner;
+    classDef triage stroke:#b8860b,stroke-width:2px;
+    class D,H owner;
+    class A triage;
 ```
 
-| Raia | O que acontece | Quem faz |
+| Etapa | O que acontece | Quem faz |
 |---|---|---|
 | **Inbox** | você escolhe o que entra na fábrica e manda o card para refinar | **você** |
 | Refinar | PO, UX/UI e segurança escrevem a spec; o tech lead monta arquitetura e plano de teste | agentes |
@@ -88,7 +90,7 @@ sequenceDiagram
     Dono->>D: cria o card (app ou CLI)
     Dono->>D: manda para refinar (evento do dono)
     D->>A: refinar (worktree, contexto do projeto)
-    A->>D: pede a spec pelo MCP
+    A->>D: grava a spec pelo MCP
     D->>G: gates de spec e plano de teste
     G-->>D: verde
     D-->>Dono: aviso: spec espera por você
@@ -197,9 +199,8 @@ SHIPFLOOR_DISPATCHER_ENABLED=true
 PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin
 EOF
 
-# c. reiniciar o serviço e conferir
+# c. reiniciar o serviço
 systemctl --user restart shipfloor.service
-journalctl --user -u shipfloor.service | grep dispatcher_state    # deve mostrar state=enabled
 ```
 
 Agora o projeto. O daemon lê o `.shipfloor/factory.yml` **da `main`**, então ele precisa estar commitado lá antes do registro. O [`docs/examples/factory.yml`](docs/examples/factory.yml) é um ponto de partida mínimo: projeto, contexto, caminhos proibidos, modo de entrega, teto de custo e as camadas com seus comandos de build e teste. O dispatcher não lança sem o teto de custo. Se você salvar as Configurações do app, os limites de lá substituem os do `factory.yml`, e deixar "sem limite" ali desliga o dispatcher.
@@ -210,13 +211,14 @@ mkdir -p .shipfloor && cp "$SHIPFLOOR_HOME/docs/examples/factory.yml" .shipfloor
 # ajuste nome, repo e camadas, depois:
 git add .shipfloor && git commit -m "chore: registra o projeto no Shipfloor" && git push origin main
 
-shipfloor init .                                       # registra e mostra o quanto o contexto está pronto
+shipfloor init .                                       # registra e mede o contexto (PRODUCT.md, ARCHITECTURE.md, DESIGN.md)
+journalctl --user -u shipfloor.service | grep dispatcher_state   # state=enabled; sem projeto registrado não aparece nada
 shipfloor card create "Exportar eventos do dia em CSV"
 shipfloor card list                                    # copie o id do card
 shipfloor card move <id> ready-for-refinement          # só o dono tira o card do Inbox
 ```
 
-Com mais de um projeto registrado, o `card create` da CLI ainda não escolhe o projeto do card, então registre e use um projeto por vez até isso mudar.
+Com mais de um projeto registrado, o dispatcher segue o `factory.yml` do primeiro registrado e o `card create` da CLI não escolhe o projeto do card. Registre e use um projeto por vez até isso mudar; o seletor do app só troca o que o quadro mostra.
 
 Abra o app:
 
@@ -234,7 +236,7 @@ Se algo não sobe, `shipfloor doctor` mostra o que falta e `journalctl --user -u
 
 O Shipfloor é a segunda versão da fábrica. A primeira, a V0, está arquivada em [kennedykjj/shipfloor-legacy](https://github.com/kennedykjj/shipfloor-legacy) e construiu esta versão card a card até a fase 5. O código da V0 não foi copiado, só virou especificação ([o que a V0 fazia mal](docs/context/gargalos-da-v0.md)). O projeto é usado pelo próprio autor e muda rápido.
 
-Em 18 de outubro de 2026, três dias depois do primeiro commit: 8 módulos Kotlin, 81 arquivos de teste e 128 issues, 124 delas fechadas. O redesenho visual do app (tema, quadro em duas raias, modais, seletor de projeto) foi feito à mão, com o autor.
+Em 18 de outubro de 2026, três dias depois do primeiro commit: 8 módulos Kotlin, 81 arquivos de teste e 128 issues, 124 delas fechadas. O redesenho visual do app (tema, quadro em duas raias, modais, seletor de projeto) foi feito à mão, com o autor. Das 163 PRs já mergeadas, as da fase 6 (por exemplo [#284](https://github.com/kennedykjj/shipfloor/pull/284), [#286](https://github.com/kennedykjj/shipfloor/pull/286) e [#287](https://github.com/kennedykjj/shipfloor/pull/287)) saíram da fábrica sob gates, com o CI como juiz.
 
 | Fase | Tema | Situação |
 |---|---|---|

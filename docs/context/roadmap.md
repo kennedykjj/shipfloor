@@ -116,7 +116,7 @@ Cada fase deixa a fábrica usável e só termina quando o teste de saída passa.
 | #61 | S5-04 | Relatório de lead time e custo por card | `daemon` | #33 | fechada |
 | #62 | S5-05 | Virada: a shipfloor assume o próprio repositório | à mão | #58, #59, #60, #61 | fechada |
 
-## Fase 6 · App desktop (rascunho)
+## Fase 6 · App desktop
 
 **Saída:** Um dia de operação sem abrir a CLI para nenhuma ação do dono.
 
@@ -133,7 +133,7 @@ Cada fase deixa a fábrica usável e só termina quando o teste de saída passa.
 | #71 | S6-09 | Tela de fechamento | `app` | #66 | fechada |
 | #72 | S6-10 | Pacotes deb e rpm | à mão | #64 | fechada |
 
-## Fase 7 · Assistente (rascunho)
+## Fase 7 · Assistente
 
 **Saída:** Skins trocáveis sem reiniciar; nenhuma frase do assistente contradiz o banco.
 
@@ -145,7 +145,7 @@ Cada fase deixa a fábrica usável e só termina quando o teste de saída passa.
 | #76 | S7-04 | Skin pop-up animado | `app` | #74 | fechada |
 | #77 | S7-05 | Decisão sobre o cartum | à mão | #75, #76 | adiada (decisão 20) |
 
-## Fase 8 · Portes e onboarding (rascunho)
+## Fase 8 · Portes e onboarding
 
 **Saída:** Em VM limpa de cada sistema: instalar, registrar e entregar um card, sem admin no Windows.
 
@@ -159,7 +159,7 @@ Cada fase deixa a fábrica usável e só termina quando o teste de saída passa.
 | #83 | S8-06 | Rascunho assistido dos documentos do projeto | `daemon` | #82 | fechada |
 | #84 | S8-07 | CLI nativa com GraalVM | `cli` | #80 | fechada |
 
-## Fase 9 · Empresa (rascunho)
+## Fase 9 · Empresa
 
 **Saída:** Fluxo corporativo real de ponta a ponta num ticket sem dado sensível.
 

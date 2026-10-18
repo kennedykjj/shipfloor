@@ -18,6 +18,7 @@ import javax.imageio.ImageIO
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
+import shipfloor.core.CostSetting
 import shipfloor.core.FactorySettings
 import shipfloor.core.WorkHoursSetting
 import org.assertj.core.api.Assertions.assertThat
@@ -179,10 +180,11 @@ class ScreenshotsTest {
         val out = Path.of("build", "screens").also { Files.createDirectories(it) }
         listOf(true to "dark", false to "light").forEach { (dark, name) ->
             val file = out.resolve("settings-$name.png")
-            render(1440, 900, file) {
+            render(1440, 490, file) {
                 Tokens.dark = dark
                 val saved = FactorySettings.DEFAULT.copy(
                     poolSize = 4,
+                    cost = CostSetting(BigDecimal("5"), BigDecimal("50")),
                     workHours = WorkHoursSetting(
                         setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY),
                         LocalTime.of(9, 0),
