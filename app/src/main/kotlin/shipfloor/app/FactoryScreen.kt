@@ -100,8 +100,8 @@ fun AppBar(
 /** What the picker shows for one project: its short name, how many cards it has and how many wait for the owner. */
 class ProjectEntry(val name: String, val cards: Int, val waiting: Int)
 
-/** The projects the board can be narrowed to; [selected] null shows all of them. */
-class ProjectFilter(val entries: List<ProjectEntry>, val selected: String?, val onSelect: (String?) -> Unit) {
+/** The projects the board can switch between; [selected] is the one on screen. */
+class ProjectFilter(val entries: List<ProjectEntry>, val selected: String?, val onSelect: (String) -> Unit) {
     companion object {
         val NONE = ProjectFilter(emptyList(), null) {}
     }
@@ -112,7 +112,7 @@ class ProjectFilter(val entries: List<ProjectEntry>, val selected: String?, val 
 private fun ProjectDropdown(projects: ProjectFilter) {
     var open by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
-    val waitingTotal = projects.entries.sumOf { it.waiting }
+    val waitingElsewhere = projects.entries.any { it.name != projects.selected && it.waiting > 0 }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         BasicText("/", style = TextStyle(fontFamily = sans, fontSize = 15.sp, color = Tokens.faint))
         Box {
@@ -130,11 +130,11 @@ private fun ProjectDropdown(projects: ProjectFilter) {
             ) {
                 IconGlyph(AppIcon.FOLDER, Tokens.muted)
                 BasicText(
-                    projects.selected ?: Texts.PROJECT_ALL,
+                    projects.selected.orEmpty(),
                     style = TextStyle(fontFamily = sans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Tokens.text),
                 )
-                // With the list closed, a project that waits for the owner is still visible from the bar.
-                if (!open && waitingTotal > 0 && projects.selected == null) Box(Modifier.size(6.dp).background(Tokens.accent, RoundedCornerShape(3.dp)))
+                // With the list closed, another project that waits for the owner is still visible from the bar.
+                if (!open && waitingElsewhere) Box(Modifier.size(6.dp).background(Tokens.accent, RoundedCornerShape(3.dp)))
                 IconGlyph(AppIcon.ARROW_DOWN, Tokens.faint)
             }
             if (open) {
@@ -169,30 +169,28 @@ private fun ProjectDropdown(projects: ProjectFilter) {
                         }
                         Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
                             val shown = projects.entries.filter { it.name.contains(query.trim(), ignoreCase = true) }
-                            val all = ProjectEntry(Texts.PROJECT_ALL, projects.entries.sumOf { it.cards }, waitingTotal)
-                            (if (query.isBlank()) listOf<ProjectEntry?>(null) + shown else shown).forEach { entry ->
-                                val shownEntry = entry ?: all
-                                val on = entry?.name == projects.selected
+                            shown.forEach { entry ->
+                                val on = entry.name == projects.selected
                                 Row(
                                     Modifier.fillMaxWidth().height(34.dp)
                                         .background(if (on) Tokens.raise else Color.Transparent, RoundedCornerShape(6.dp))
                                         .clickable(role = Role.Button) {
-                                            projects.onSelect(entry?.name)
+                                            projects.onSelect(entry.name)
                                             open = false
                                         }
                                         .padding(horizontal = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
-                                    IconGlyph(if (entry == null) AppIcon.BOARD else AppIcon.FOLDER, if (on) Tokens.text else Tokens.muted)
+                                    IconGlyph(AppIcon.FOLDER, if (on) Tokens.text else Tokens.muted)
                                     BasicText(
-                                        shownEntry.name,
+                                        entry.name,
                                         modifier = Modifier.weight(1f),
                                         maxLines = 1,
                                         style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = if (on) Tokens.text else Tokens.soft),
                                     )
-                                    if (shownEntry.waiting > 0) Box(Modifier.size(6.dp).background(Tokens.accent, RoundedCornerShape(3.dp)))
-                                    BasicText(shownEntry.cards.toString(), style = TextStyle(fontFamily = mono, fontSize = 12.sp, color = Tokens.faint))
+                                    if (entry.waiting > 0) Box(Modifier.size(6.dp).background(Tokens.accent, RoundedCornerShape(3.dp)))
+                                    BasicText(entry.cards.toString(), style = TextStyle(fontFamily = mono, fontSize = 12.sp, color = Tokens.faint))
                                     if (on) IconGlyph(AppIcon.CHECK, Tokens.text)
                                 }
                             }

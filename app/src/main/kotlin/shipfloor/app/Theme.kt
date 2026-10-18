@@ -39,6 +39,18 @@ object TrayPreference {
     }
 }
 
+/** The project the board shows, kept between runs in the user's preferences. */
+object ProjectPreference {
+    private const val KEY = "project"
+    private val node get() = Preferences.userRoot().node("shipfloor/app")
+
+    fun load(): String? = runCatching { node.get(KEY, null) }.getOrNull()
+
+    fun save(name: String) {
+        runCatching { node.put(KEY, name) }
+    }
+}
+
 /** One theme of the app: the neutral scale, the single accent (what waits for the owner) and the outcome colors. */
 class Palette(
     val ground: Color,
@@ -340,7 +352,6 @@ object Texts {
     const val ON = "Ligado"
     const val OFF = "Desligado"
 
-    const val PROJECT_ALL = "Todos os projetos"
     const val PROJECT_HEADING = "PROJETO"
     const val PROJECT_SEARCH = "Buscar projeto"
     const val GROUP_FACTORY = "Fábrica"
