@@ -66,6 +66,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.Instant
@@ -560,8 +561,9 @@ private fun EventRow(event: TimelineEvent, zone: ZoneId) {
         // Filled mark for the owner's signed decision, hollow for agents: the state does not rely on color alone.
         val mark = Modifier.size(8.dp)
         Box(if (owner) mark.background(Tokens.text) else mark.border(1.dp, Tokens.muted))
-        BasicText(event.actor, style = body(Tokens.text).copy(fontWeight = FontWeight.SemiBold))
-        BasicText(event.type, style = body())
+        // One line each; the actor gives way first, so the event name stays whole and nothing wraps mid-word.
+        BasicText(event.actor, modifier = Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis, style = body(Tokens.text).copy(fontWeight = FontWeight.SemiBold))
+        BasicText(event.type, maxLines = 1, softWrap = false, style = body())
         if (owner) {
             BasicText(
                 Texts.SIGNED_BY_OWNER,

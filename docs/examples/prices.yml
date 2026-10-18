@@ -1,0 +1,8 @@
+# US$ por milhão de tokens, usados na estimativa de custo de cada run.
+# Valores de exemplo: confira a tabela de preços do seu provedor antes de confiar no custo.
+# O daemon lê ~/.local/share/shipfloor/prices.yml: copie este arquivo para lá e ajuste.
+# Modelo que não está na tabela custa "?" na tela, nunca US$ 0.
+claude-opus-5-5:   {input: 4.00,  output: 20.00, cache_write_5m: 5.00,  cache_write_1h: 8.00,  cache_read: 0.20}
+claude-sonnet-5-5: {input: 2.00,  output: 10.00, cache_write_5m: 2.50,  cache_write_1h: 4.00,  cache_read: 0.20}
+claude-haiku-5-5:  {input: 0.10,  output: 0.50,  cache_write_5m: 0.125, cache_write_1h: 0.20,  cache_read: 0.01}
+claude-fable-5-1:  {input: 10.00, output: 50.00, cache_write_5m: 12.50, cache_write_1h: 20.00, cache_read: 0.25}

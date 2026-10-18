@@ -1,0 +1,34 @@
+# Modelo mínimo de .shipfloor/factory.yml. Ele precisa estar commitado na main do projeto:
+# o daemon lê o arquivo de lá, nunca da árvore de trabalho. Copie para .shipfloor/factory.yml,
+# ajuste as camadas ao seu projeto e faça o commit antes de `shipfloor init`.
+project:
+  name: meu-projeto
+  repo: voce/meu-projeto
+
+language: pt-BR
+
+# Documentos que os agentes recebem como contexto do projeto.
+context: [PRODUCT.md, ARCHITECTURE.md, CLAUDE.md]
+
+# Caminhos que nenhum agente altera; ficam por sua conta.
+forbidden: [.shipfloor/, .github/]
+
+# Modo de entrega: `autonomous` (a fábrica mergeia) ou `pr` (para no PR, para revisão humana).
+delivery_mode: pr
+
+# Teto de custo em US$ (estimativa pela tabela de preços). Sem ele o dispatcher não lança.
+cost:
+  per_card_usd: 5
+  per_day_usd: 50
+
+# Uma entrada por camada do projeto. `build` e `test` rodam dentro de `path`;
+# `{selector}` vira o teste que o card quer rodar; `ran` é o texto que prova que algum teste rodou.
+# Com Gradle, o texto PASSED só aparece se o projeto pedir: tasks.test { testLogging { events("passed") } }
+layers:
+  - name: app
+    path: ./
+    stack: Kotlin, Gradle
+    build: ./gradlew build --console=plain
+    test: ./gradlew test --tests {selector} --rerun --console=plain
+    ran: 'PASSED'
+    tests: ['src/test/**']

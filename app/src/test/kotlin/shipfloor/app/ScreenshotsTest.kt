@@ -18,6 +18,7 @@ import javax.imageio.ImageIO
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
+import shipfloor.core.CostSetting
 import shipfloor.core.FactorySettings
 import shipfloor.core.WorkHoursSetting
 import org.assertj.core.api.Assertions.assertThat
@@ -62,7 +63,7 @@ object ScreenFixtures {
         column = "SPEC_REVIEW",
         spec = SpecView(
             "ready",
-            "## Problema\n\nO app não sabe quando há versão nova do daemon.\n\n## Critérios de aceitação\n\n" +
+            "Problema\n\nO app não sabe quando há versão nova do daemon.\n\nCritérios de aceitação\n\n" +
                 "1. Dado que há versão nova, quando o app abre, então avisa o dono.\n" +
                 "2. Dado que o dono recusa, então o aviso não volta no mesmo dia.",
         ),
@@ -134,6 +135,19 @@ class ScreenshotsTest {
     }
 
     @Test
+    fun `renders the screens used by the readme to PNG files`() {
+        val out = Path.of("build", "screens").also { Files.createDirectories(it) }
+        listOf(true to "dark", false to "light").forEach { (dark, name) ->
+            val board = out.resolve("readme-board-$name.png")
+            render(1440, 1120, board) { FactoryContent(dark) }
+            val card = out.resolve("readme-card-$name.png")
+            render(1440, 1100, card) { FactoryContent(dark, modals = true, listModal = false) }
+            assertThat(Files.size(board)).isGreaterThan(10_000L)
+            assertThat(Files.size(card)).isGreaterThan(10_000L)
+        }
+    }
+
+    @Test
     fun `renders the tray icon at its sizes to PNG files`() {
         val out = Path.of("build", "screens").also { Files.createDirectories(it) }
         TrayIcons.SIZES.forEach { size ->
@@ -166,12 +180,19 @@ class ScreenshotsTest {
         val out = Path.of("build", "screens").also { Files.createDirectories(it) }
         listOf(true to "dark", false to "light").forEach { (dark, name) ->
             val file = out.resolve("settings-$name.png")
-            render(1440, 900, file) {
+            render(1440, 490, file) {
                 Tokens.dark = dark
-                val saved = FactorySettings.DEFAULT.copy(poolSize = 12)
-                val draft = saved.copy(
-                    workHours = WorkHoursSetting(setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.FRIDAY), LocalTime.of(9, 0), LocalTime.of(18, 0), "America/Sao_Paulo"),
+                val saved = FactorySettings.DEFAULT.copy(
+                    poolSize = 4,
+                    cost = CostSetting(BigDecimal("5"), BigDecimal("50")),
+                    workHours = WorkHoursSetting(
+                        setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY),
+                        LocalTime.of(9, 0),
+                        LocalTime.of(18, 0),
+                        "America/Sao_Paulo",
+                    ),
                 )
+                val draft = saved
                 Column(Modifier.fillMaxSize().background(Tokens.ground)) {
                     Box(Modifier.weight(1f)) {
                         Editor(
@@ -193,18 +214,18 @@ class ScreenshotsTest {
     }
 
     @Composable
-    private fun FactoryContent(dark: Boolean, chips: Boolean = false, inbox: Int = 4, modals: Boolean = false) {
+    private fun FactoryContent(dark: Boolean, chips: Boolean = false, inbox: Int = 4, modals: Boolean = false, listModal: Boolean = true) {
         Tokens.dark = dark
         val density = if (chips) BoardDensity.CHIPS else BoardDensity.CARDS
         Box(Modifier.fillMaxSize().background(Tokens.ground)) {
             Column(Modifier.fillMaxSize()) {
-                AppBar(AppSection.BOARD, feedAvailable = true, onSelect = {}, onSettings = {}, onSearch = {}, theme = ThemeChoice.SYSTEM, onTheme = {}, projects = ProjectFilter(listOf(ProjectEntry("pickio", 114, 2), ProjectEntry("shipfloor", 128, 0)), "pickio") {})
+                AppBar(AppSection.BOARD, feedAvailable = true, onSelect = {}, onSettings = {}, onSearch = {}, theme = ThemeChoice.SYSTEM, onTheme = {}, projects = ProjectFilter(listOf(ProjectEntry("pickio", 114, 2), ProjectEntry("shipfloor", 128, 0)), "shipfloor") {})
                 Box(Modifier.weight(1f)) {
                     FactoryScreen(view = ScreenFixtures.view(inbox), pulse = ScreenFixtures.pulse(), connected = true, density = density)
                 }
             }
             if (modals) {
-                ColumnListModal(
+                if (listModal) ColumnListModal(
                     BoardColumn.INBOX,
                     ScreenFixtures.board(inbox).cardsIn(BoardColumn.INBOX),
                     density,

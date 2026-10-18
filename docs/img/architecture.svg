@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-labelledby="t d">
+  <title id="t">Arquitetura do Shipfloor</title>
+  <desc id="d">App, CLI e agentes falam com um daemon único, que é o único escritor do SQLite e usa ports para GitHub, Jira e os runtimes dos agentes.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#8a8f98"/></marker>
+    <marker id="y" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#f2c230"/></marker>
+    <style>
+      text{font-family:Inter,Geist,"Segoe UI",Helvetica,Arial,sans-serif;fill:#ececef}
+      .h{font-size:19px;font-weight:600}
+      .s{font-size:15px;fill:#a3abb6}
+      .m{font-family:"Geist Mono","SF Mono",Menlo,Consolas,monospace;font-size:14px;fill:#a3abb6}
+      .e{font-size:14px;fill:#8a8f98;letter-spacing:.04em}
+      .box{fill:#1b1d21;stroke:#2e3238;stroke-width:1.5}
+      .in{fill:#24272c;stroke:#2e3238;stroke-width:1}
+      .line{stroke:#8a8f98;stroke-width:1.6;fill:none}
+    </style>
+  </defs>
+  <rect width="1200" height="800" rx="20" fill="#131417"/>
+
+  <!-- clients -->
+  <text class="e" x="60" y="44">CLIENTES</text>
+  <rect class="box" x="60" y="58" width="300" height="76" rx="12"/>
+  <text class="h" x="84" y="92">App desktop</text><text class="s" x="84" y="114">Compose · bandeja · avisos</text>
+  <rect class="box" x="450" y="58" width="300" height="76" rx="12"/>
+  <text class="h" x="474" y="92">CLI do dono</text><text class="s" x="474" y="114">card · project · doctor · audit</text>
+  <rect class="box" x="840" y="58" width="300" height="76" rx="12"/>
+  <text class="h" x="864" y="92">Agentes</text><text class="s" x="864" y="114">Claude Code, um por run</text>
+
+  <path class="line" d="M210 134V206" marker-end="url(#a)"/><text class="m" x="222" y="176">socket unix</text>
+  <path class="line" d="M600 134V206" marker-end="url(#a)"/><text class="m" x="612" y="176">socket unix</text>
+  <path class="line" d="M990 134V206" marker-end="url(#a)"/><text class="m" x="1002" y="176">MCP (lê e pede)</text>
+
+  <!-- daemon -->
+  <rect x="40" y="206" width="1120" height="262" rx="16" fill="#1b1d21" stroke="#f2c230" stroke-width="2"/>
+  <text class="h" x="70" y="240" style="fill:#f2c230">Daemon</text>
+  <text class="s" x="162" y="240">o único escritor do estado, sempre ligado, com o app fechado também</text>
+
+  <rect class="in" x="70" y="262" width="250" height="72" rx="10"/><text class="h" x="88" y="292" style="font-size:17px">Socket e eventos</text><text class="s" x="88" y="314">JSON e stream ao vivo</text>
+  <rect class="in" x="340" y="262" width="250" height="72" rx="10"/><text class="h" x="358" y="292" style="font-size:17px">Dispatcher e pool</text><text class="s" x="358" y="314">slots, locks, worktrees</text>
+  <rect class="in" x="610" y="262" width="250" height="72" rx="10"/><text class="h" x="628" y="292" style="font-size:17px">Gates</text><text class="s" x="628" y="314">scripts determinísticos</text>
+  <rect class="in" x="880" y="262" width="250" height="72" rx="10"/><text class="h" x="898" y="292" style="font-size:17px">Servidor MCP</text><text class="s" x="898" y="314">o agente pede, o daemon grava</text>
+
+  <rect class="in" x="70" y="350" width="250" height="72" rx="10"/><text class="h" x="88" y="380" style="font-size:17px">Custo medido</text><text class="s" x="88" y="402">da transcrição de cada run</text>
+  <rect class="in" x="340" y="350" width="250" height="72" rx="10"/><text class="h" x="358" y="380" style="font-size:17px">Políticas</text><text class="s" x="358" y="402">horário, limites, entrega</text>
+  <rect class="in" x="610" y="350" width="250" height="72" rx="10"/><text class="h" x="628" y="380" style="font-size:17px">Pipelines</text><text class="s" x="628" y="402">refinar, codar, validar</text>
+  <rect class="in" x="880" y="350" width="250" height="72" rx="10"/><text class="h" x="898" y="380" style="font-size:17px">Entrega</text><text class="s" x="898" y="402">PR ou merge autônomo</text>
+  <text class="m" x="70" y="452">toda mudança de estado vira um evento com ator, gravado na mesma transação</text>
+
+  <!-- below -->
+  <text class="e" x="60" y="522">ESTADO</text>
+  <text class="e" x="568" y="522">PORTS E ADAPTERS</text>
+
+  <path class="line" d="M210 468V548" stroke="#f2c230" marker-end="url(#y)"/><text class="m" x="222" y="512" style="fill:#f2c230">só o daemon escreve</text>
+  <rect class="box" x="60" y="548" width="300" height="104" rx="12"/>
+  <text class="h" x="84" y="582">SQLite + specs .md</text>
+  <text class="s" x="84" y="606">SQLDelight, migrações verificadas</text>
+  <text class="s" x="84" y="626">eventos imutáveis, hash da spec</text>
+
+  <path class="line" d="M555 468V548" marker-end="url(#a)"/>
+  <path class="line" d="M800 468V548" marker-end="url(#a)"/>
+  <path class="line" d="M1045 468V548" marker-end="url(#a)"/>
+  <rect class="box" x="440" y="548" width="230" height="104" rx="12"/>
+  <text class="h" x="462" y="582">Tracker</text><text class="s" x="462" y="606">gh issues · acli (Jira)</text><text class="s" x="462" y="626">importar e fechar</text>
+  <rect class="box" x="685" y="548" width="230" height="104" rx="12"/>
+  <text class="h" x="707" y="582">Forge</text><text class="s" x="707" y="606">gh: PR, CI, merge</text><text class="s" x="707" y="626">branch por card</text>
+  <rect class="box" x="930" y="548" width="230" height="104" rx="12"/>
+  <text class="h" x="952" y="582">Runtime</text><text class="s" x="952" y="606">claude · codex (adapter)</text><text class="s" x="952" y="626">timeout em todo processo</text>
+
+  <path class="line" d="M555 652V696" marker-end="url(#a)"/>
+  <path class="line" d="M800 652V696" marker-end="url(#a)"/>
+  <path class="line" d="M1045 652V696" marker-end="url(#a)"/>
+  <text class="e" x="60" y="716">FORA DA MÁQUINA</text><text class="m" x="60" y="738">GitHub e Jira: só com autorização</text><text class="m" x="60" y="756">do dono ou política do projeto</text>
+  <rect class="in" x="440" y="700" width="230" height="44" rx="10" fill="none" stroke-dasharray="5 4"/><text class="s" x="555" y="727" text-anchor="middle">Jira · GitHub Issues</text>
+  <rect class="in" x="685" y="700" width="230" height="44" rx="10" fill="none" stroke-dasharray="5 4"/><text class="s" x="800" y="727" text-anchor="middle">GitHub · CI</text>
+  <rect class="in" x="930" y="700" width="230" height="44" rx="10" fill="none" stroke-dasharray="5 4"/><text class="s" x="1045" y="727" text-anchor="middle">Provedor do modelo</text>
+  <text class="m" x="450" y="776">módulos: core ← store, ports ← adapters ← daemon (verificado pelo build)</text>
+</svg>
