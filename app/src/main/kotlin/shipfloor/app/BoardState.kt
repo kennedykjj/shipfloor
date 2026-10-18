@@ -21,6 +21,8 @@ data class BoardCard(
     val blocked: Boolean = false,
     val enteredAt: Instant? = null,
     val cost: BoardCost? = null,
+    /** The repo of the card's project (`owner/name`); null when the daemon does not say. */
+    val repo: String? = null,
 )
 
 /** What a board card says about itself: texts built only from the column, numbers and ids, never from the title. */

@@ -53,6 +53,7 @@ fun AppBar(
     onSearch: () -> Unit,
     theme: ThemeChoice,
     onTheme: (ThemeChoice) -> Unit,
+    projects: ProjectFilter = ProjectFilter.NONE,
 ) {
     Row(
         modifier = Modifier
@@ -73,11 +74,26 @@ fun AppBar(
             if (feedAvailable) NavItem(Texts.FEED_TITLE, AppIcon.FEED, selected = section == AppSection.FEED) { onSelect(AppSection.FEED) }
             if (onSettings != null) NavItem(Texts.NAV_SETTINGS, AppIcon.GEAR, selected = false, onClick = onSettings)
         }
+        if (projects.names.size > 1) {
+            TextSegmented(listOf(Texts.PROJECT_ALL) + projects.names, projects.names.indexOf(projects.selected) + 1) {
+                projects.onSelect(projects.names.getOrNull(it - 1))
+            }
+        }
         Spacer(Modifier.weight(1f))
         SearchButton(onSearch)
         ThemeSwitch(theme, onTheme)
     }
 }
+
+/** The projects the board can be narrowed to: [names] are the short project names; [selected] null shows all of them. */
+class ProjectFilter(val names: List<String>, val selected: String?, val onSelect: (String?) -> Unit) {
+    companion object {
+        val NONE = ProjectFilter(emptyList(), null) {}
+    }
+}
+
+/** The short name of a project repo (`owner/name`). */
+fun projectName(repo: String): String = repo.substringAfterLast('/')
 
 /** The Shipfloor mark: floor tape from the Inbox to Done, ending in a card, on a dark tile (docs/img/icon.svg). */
 @Composable

@@ -254,7 +254,14 @@ fun main() {
         val state by (monitor?.state ?: noRuntimeDir).collectAsState()
         val view by (board?.view ?: noBoard).collectAsState()
         val pulseView by (pulse?.view ?: noPulse).collectAsState()
+        var projectChoice by remember { mutableStateOf<String?>(null) }
         val connected = state == ConnectionState.Connected
+        val projectNames = view?.board?.cards?.mapNotNull { it.repo }?.distinct()?.map(::projectName)?.sorted().orEmpty()
+        val shownProject = projectChoice?.takeIf { it in projectNames }
+        val shownView = view?.let { full ->
+            if (shownProject == null) full else full.copy(board = full.board.copy(cards = full.board.cards.filter { it.repo?.let(::projectName) == shownProject }))
+        }
+        val projects = ProjectFilter(projectNames, shownProject) { projectChoice = it }
         var showFeed by remember { mutableStateOf(false) }
         val hasTray = ports.tray !== NoTray
         // SHIPFLOOR_START_HIDDEN=1 starts the app in the tray with no window, for a login start.
@@ -424,9 +431,9 @@ fun main() {
                         )
                     }
                     // The belt stays on screen (dimmed) once it has been drawn; before that, the connection screen.
-                    view != null -> ScreenWithTabs(AppSection.BOARD, ::selectSection, feedAvailable, openSettings, ::openPalette, themeChoice, ::chooseTheme) {
+                    view != null -> ScreenWithTabs(AppSection.BOARD, ::selectSection, feedAvailable, openSettings, ::openPalette, themeChoice, ::chooseTheme, projects) {
                         FactoryScreen(
-                            view = view,
+                            view = shownView,
                             pulse = pulseView,
                             connected = connected,
                             controller = owner,
@@ -446,7 +453,7 @@ fun main() {
                     listColumn?.let { column ->
                         ColumnListModal(
                             column = column,
-                            cards = view?.board?.cardsIn(column).orEmpty(),
+                            cards = shownView?.board?.cardsIn(column).orEmpty(),
                             density = density,
                             onOpenCard = { detail = detail.open(it) },
                             onClose = { listColumn = null },
@@ -488,10 +495,11 @@ private fun ScreenWithTabs(
     onSearch: () -> Unit,
     theme: ThemeChoice,
     onTheme: (ThemeChoice) -> Unit,
+    projects: ProjectFilter = ProjectFilter.NONE,
     content: @Composable () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().background(Tokens.ground)) {
-        AppBar(section, feedAvailable, onSelect, onSettings, onSearch, theme, onTheme)
+        AppBar(section, feedAvailable, onSelect, onSettings, onSearch, theme, onTheme, projects)
         Box(Modifier.fillMaxSize()) { content() }
     }
 }

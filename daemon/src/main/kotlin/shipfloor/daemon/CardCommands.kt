@@ -235,6 +235,7 @@ class CardCommands(
             blocked = AssistantStates.hasOpenBlock(events),
             enteredAt = enteredAt(card.column, events),
             cost = totalCost(events),
+            repo = store.projectOf(id),
         )
     }
 

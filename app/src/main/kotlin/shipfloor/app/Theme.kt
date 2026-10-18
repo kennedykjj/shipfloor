@@ -340,6 +340,7 @@ object Texts {
     const val ON = "Ligado"
     const val OFF = "Desligado"
 
+    const val PROJECT_ALL = "Todos"
     const val GROUP_FACTORY = "Fábrica"
     const val GROUP_APPEARANCE = "Aparência"
     const val GROUP_APP = "Aplicativo"
