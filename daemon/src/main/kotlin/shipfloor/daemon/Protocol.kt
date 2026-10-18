@@ -156,6 +156,8 @@ data class CardView(
     val blocked: Boolean = false,
     val enteredAt: Instant? = null,
     val cost: CardListCost? = null,
+    /** The repo of the card's project (`owner/name`), when the card is linked to one. */
+    val repo: String? = null,
 )
 
 /** The total cost of a card in `card.list`: [costUsd] is present only for [CostStatus.KNOWN] and [CostStatus.PARTIAL]. */
@@ -438,6 +440,7 @@ private fun cardJson(card: CardView): JsonObject = buildJsonObject {
     put("column", card.column.name)
     put("blocked", card.blocked)
     card.enteredAt?.let { put("enteredAt", it.toString()) }
+    card.repo?.let { put("repo", it) }
     card.cost?.let { cost ->
         put(
             "cost",

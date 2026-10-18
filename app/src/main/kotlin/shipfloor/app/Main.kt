@@ -254,7 +254,21 @@ fun main() {
         val state by (monitor?.state ?: noRuntimeDir).collectAsState()
         val view by (board?.view ?: noBoard).collectAsState()
         val pulseView by (pulse?.view ?: noPulse).collectAsState()
+        var projectChoice by remember { mutableStateOf(ProjectPreference.load()) }
         val connected = state == ConnectionState.Connected
+        val projectEntries = view?.board?.cards?.filter { it.repo != null }.orEmpty().groupBy { projectName(requireNotNull(it.repo)) }
+            .map { (name, cards) -> ProjectEntry(name, cards.size, cards.count { isWaitingForOwner(it.column) }) }
+            .sortedBy { it.name }
+        val projectNames = projectEntries.map { it.name }
+        // A board always belongs to one project: the saved one, else the first; a daemon that sends no repos shows every card.
+        val shownProject = projectChoice?.takeIf { it in projectNames } ?: projectNames.firstOrNull()
+        val shownView = view?.let { full ->
+            if (shownProject == null) full else full.copy(board = full.board.copy(cards = full.board.cards.filter { it.repo?.let(::projectName) == shownProject }))
+        }
+        val projects = ProjectFilter(projectEntries, shownProject) {
+            projectChoice = it
+            ProjectPreference.save(it)
+        }
         var showFeed by remember { mutableStateOf(false) }
         val hasTray = ports.tray !== NoTray
         // SHIPFLOOR_START_HIDDEN=1 starts the app in the tray with no window, for a login start.
@@ -262,11 +276,12 @@ fun main() {
         var detail by remember { mutableStateOf(DetailModalState()) }
         var listColumn by remember { mutableStateOf<BoardColumn?>(null) }
         var density by remember { mutableStateOf(BoardDensity.CARDS) }
+        var closeToTray by remember { mutableStateOf(TrayPreference.load()) }
         val escapeClaim = remember { EscapeClaim() }
         var palette by remember { mutableStateOf(PaletteState()) }
         var themeChoice by remember { mutableStateOf(ThemePreference.load()) }
         val paletteList = remember(view, palette.query) {
-            paletteEntries(view?.board?.cards.orEmpty(), PaletteView.entries, palette.query)
+            paletteEntries(shownView?.board?.cards.orEmpty(), PaletteView.entries, palette.query)
         }
 
         fun choose(entry: PaletteEntry?) {
@@ -361,7 +376,7 @@ fun main() {
         }
         if (windowVisible) Window(
             // The X hides the window and leaves the app in the tray; without a tray there would be no way back.
-            onCloseRequest = { if (hasTray) windowVisible = false else exitApplication() },
+            onCloseRequest = { if (hasTray && closeToTray) windowVisible = false else exitApplication() },
             title = Texts.TITLE,
             icon = remember { BitmapPainter(TrayIcons.renderTile(256).toComposeImageBitmap()) },
             state = rememberWindowState(size = DpSize(1280.dp, 800.dp), position = WindowPosition.PlatformDefault),
@@ -397,7 +412,21 @@ fun main() {
             CompositionLocalProvider(LocalEscapeClaim provides escapeClaim) {
             Box(Modifier.fillMaxSize()) {
                 when {
-                    showSettings && settingsClient != null -> SettingsScreen(settingsClient, onBack = { showSettings = false })
+                    showSettings && settingsClient != null -> SettingsScreen(
+                        settingsClient,
+                        AppSettings(
+                            theme = themeChoice,
+                            onTheme = ::chooseTheme,
+                            density = density,
+                            onDensity = { density = it },
+                            closeToTray = closeToTray,
+                            onCloseToTray = {
+                                closeToTray = it
+                                TrayPreference.save(it)
+                            },
+                        ),
+                        onBack = { showSettings = false },
+                    )
                     feed != null && feedAvailable && showFeed -> ScreenWithTabs(AppSection.FEED, ::selectSection, feedAvailable, openSettings, ::openPalette, themeChoice, ::chooseTheme) {
                         val feedState by feed.client.state.collectAsState()
                         val scope = rememberCoroutineScope()
@@ -409,9 +438,9 @@ fun main() {
                         )
                     }
                     // The belt stays on screen (dimmed) once it has been drawn; before that, the connection screen.
-                    view != null -> ScreenWithTabs(AppSection.BOARD, ::selectSection, feedAvailable, openSettings, ::openPalette, themeChoice, ::chooseTheme) {
+                    view != null -> ScreenWithTabs(AppSection.BOARD, ::selectSection, feedAvailable, openSettings, ::openPalette, themeChoice, ::chooseTheme, projects) {
                         FactoryScreen(
-                            view = view,
+                            view = shownView,
                             pulse = pulseView,
                             connected = connected,
                             controller = owner,
@@ -431,7 +460,7 @@ fun main() {
                     listColumn?.let { column ->
                         ColumnListModal(
                             column = column,
-                            cards = view?.board?.cardsIn(column).orEmpty(),
+                            cards = shownView?.board?.cardsIn(column).orEmpty(),
                             density = density,
                             onOpenCard = { detail = detail.open(it) },
                             onClose = { listColumn = null },
@@ -473,10 +502,11 @@ private fun ScreenWithTabs(
     onSearch: () -> Unit,
     theme: ThemeChoice,
     onTheme: (ThemeChoice) -> Unit,
+    projects: ProjectFilter = ProjectFilter.NONE,
     content: @Composable () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().background(Tokens.ground)) {
-        AppBar(section, feedAvailable, onSelect, onSettings, onSearch, theme, onTheme)
+        AppBar(section, feedAvailable, onSelect, onSettings, onSearch, theme, onTheme, projects)
         Box(Modifier.fillMaxSize()) { content() }
     }
 }

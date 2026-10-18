@@ -15,7 +15,11 @@ import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
 import javax.imageio.ImageIO
+import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalTime
+import shipfloor.core.FactorySettings
+import shipfloor.core.WorkHoursSetting
 import org.assertj.core.api.Assertions.assertThat
 import org.jetbrains.skia.EncodedImageFormat
 import org.junit.jupiter.api.AfterEach
@@ -157,13 +161,44 @@ class ScreenshotsTest {
         }
     }
 
+    @Test
+    fun `renders the settings screen to PNG files`() {
+        val out = Path.of("build", "screens").also { Files.createDirectories(it) }
+        listOf(true to "dark", false to "light").forEach { (dark, name) ->
+            val file = out.resolve("settings-$name.png")
+            render(1440, 900, file) {
+                Tokens.dark = dark
+                val saved = FactorySettings.DEFAULT.copy(poolSize = 12)
+                val draft = saved.copy(
+                    workHours = WorkHoursSetting(setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.FRIDAY), LocalTime.of(9, 0), LocalTime.of(18, 0), "America/Sao_Paulo"),
+                )
+                Column(Modifier.fillMaxSize().background(Tokens.ground)) {
+                    Box(Modifier.weight(1f)) {
+                        Editor(
+                            state = SettingsDraft(saved).copy(draft = draft),
+                            saving = false,
+                            justSaved = false,
+                            badInputs = emptyMap(),
+                            onBadInputs = {},
+                            onChange = {},
+                            onDiscard = {},
+                            onSave = {},
+                            app = AppSettings(ThemeChoice.SYSTEM, {}, BoardDensity.CARDS, {}, true, {}),
+                        )
+                    }
+                }
+            }
+            assertThat(Files.size(file)).isGreaterThan(10_000L)
+        }
+    }
+
     @Composable
     private fun FactoryContent(dark: Boolean, chips: Boolean = false, inbox: Int = 4, modals: Boolean = false) {
         Tokens.dark = dark
         val density = if (chips) BoardDensity.CHIPS else BoardDensity.CARDS
         Box(Modifier.fillMaxSize().background(Tokens.ground)) {
             Column(Modifier.fillMaxSize()) {
-                AppBar(AppSection.BOARD, feedAvailable = true, onSelect = {}, onSettings = {}, onSearch = {}, theme = ThemeChoice.SYSTEM, onTheme = {})
+                AppBar(AppSection.BOARD, feedAvailable = true, onSelect = {}, onSettings = {}, onSearch = {}, theme = ThemeChoice.SYSTEM, onTheme = {}, projects = ProjectFilter(listOf(ProjectEntry("pickio", 114, 2), ProjectEntry("shipfloor", 128, 0)), "pickio") {})
                 Box(Modifier.weight(1f)) {
                     FactoryScreen(view = ScreenFixtures.view(inbox), pulse = ScreenFixtures.pulse(), connected = true, density = density)
                 }

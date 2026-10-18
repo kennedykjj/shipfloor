@@ -27,6 +27,30 @@ object ThemePreference {
     }
 }
 
+/** Whether the X hides the window into the tray (default) or quits; kept between runs in the user's preferences. */
+object TrayPreference {
+    private const val KEY = "closeToTray"
+    private val node get() = Preferences.userRoot().node("shipfloor/app")
+
+    fun load(): Boolean = runCatching { node.getBoolean(KEY, true) }.getOrDefault(true)
+
+    fun save(value: Boolean) {
+        runCatching { node.putBoolean(KEY, value) }
+    }
+}
+
+/** The project the board shows, kept between runs in the user's preferences. */
+object ProjectPreference {
+    private const val KEY = "project"
+    private val node get() = Preferences.userRoot().node("shipfloor/app")
+
+    fun load(): String? = runCatching { node.get(KEY, null) }.getOrNull()
+
+    fun save(name: String) {
+        runCatching { node.put(KEY, name) }
+    }
+}
+
 /** One theme of the app: the neutral scale, the single accent (what waits for the owner) and the outcome colors. */
 class Palette(
     val ground: Color,
@@ -328,6 +352,17 @@ object Texts {
     const val ON = "Ligado"
     const val OFF = "Desligado"
 
+    const val PROJECT_HEADING = "PROJETO"
+    const val PROJECT_SEARCH = "Buscar projeto"
+    const val GROUP_FACTORY = "Fábrica"
+    const val GROUP_APPEARANCE = "Aparência"
+    const val GROUP_APP = "Aplicativo"
+    const val HOURS_DAYS = "Dias"
+    const val NO_LIMIT = "sem limite"
+    const val THEME_LABEL = "Tema"
+    const val DENSITY_LABEL = "Cards no quadro"
+    const val TRAY_LABEL = "Fechar para a bandeja"
+    const val TRAY_DESCRIPTION = "O X esconde a janela e a fábrica segue rodando."
     const val GROUP_POOL = "Pool de sessões"
     const val GROUP_HOURS = "Horário de trabalho"
     const val GROUP_COST = "Limites de custo"

@@ -122,7 +122,7 @@ fun parseBoardCard(element: JsonElement?): BoardCard? {
             null
         }
     }
-    return BoardCard(id, title, column, blocked, enteredAt, parseCardCost(obj["cost"]))
+    return BoardCard(id, title, column, blocked, enteredAt, parseCardCost(obj["cost"]), obj["repo"]?.primitiveOrNull()?.contentOrNull)
 }
 
 private fun parseCardCost(element: JsonElement?): BoardCost? {

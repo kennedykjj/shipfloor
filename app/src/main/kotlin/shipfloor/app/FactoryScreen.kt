@@ -13,10 +13,26 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +69,7 @@ fun AppBar(
     onSearch: () -> Unit,
     theme: ThemeChoice,
     onTheme: (ThemeChoice) -> Unit,
+    projects: ProjectFilter = ProjectFilter.NONE,
 ) {
     Row(
         modifier = Modifier
@@ -67,6 +84,7 @@ fun AppBar(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             BrandMark()
             BasicText(Texts.TITLE, style = TextStyle(fontFamily = sans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Tokens.text))
+            if (projects.entries.size > 1) ProjectDropdown(projects)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             NavItem(Texts.NAV_FACTORY, AppIcon.BOARD, selected = section == AppSection.BOARD) { onSelect(AppSection.BOARD) }
@@ -78,6 +96,116 @@ fun AppBar(
         ThemeSwitch(theme, onTheme)
     }
 }
+
+/** What the picker shows for one project: its short name, how many cards it has and how many wait for the owner. */
+class ProjectEntry(val name: String, val cards: Int, val waiting: Int)
+
+/** The projects the board can switch between; [selected] is the one on screen. */
+class ProjectFilter(val entries: List<ProjectEntry>, val selected: String?, val onSelect: (String) -> Unit) {
+    companion object {
+        val NONE = ProjectFilter(emptyList(), null) {}
+    }
+}
+
+/** The project switcher, beside the brand like a breadcrumb: folder, current project, chevron; the list searches when it is long. */
+@Composable
+private fun ProjectDropdown(projects: ProjectFilter) {
+    var open by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    val waitingElsewhere = projects.entries.any { it.name != projects.selected && it.waiting > 0 }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        BasicText("/", style = TextStyle(fontFamily = sans, fontSize = 15.sp, color = Tokens.faint))
+        Box {
+            Row(
+                modifier = Modifier
+                    .height(32.dp)
+                    .background(if (open) Tokens.raise else Color.Transparent, RoundedCornerShape(6.dp))
+                    .clickable(role = Role.DropdownList) {
+                        query = ""
+                        open = !open
+                    }
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                IconGlyph(AppIcon.FOLDER, Tokens.muted)
+                BasicText(
+                    projects.selected.orEmpty(),
+                    style = TextStyle(fontFamily = sans, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Tokens.text),
+                )
+                // With the list closed, another project that waits for the owner is still visible from the bar.
+                if (!open && waitingElsewhere) Box(Modifier.size(6.dp).background(Tokens.accent, RoundedCornerShape(3.dp)))
+                IconGlyph(AppIcon.ARROW_DOWN, Tokens.faint)
+            }
+            if (open) {
+                Popup(
+                    alignment = Alignment.TopStart,
+                    offset = IntOffset(0, with(LocalDensity.current) { 36.dp.roundToPx() }),
+                    onDismissRequest = { open = false },
+                    properties = PopupProperties(focusable = true),
+                ) {
+                    Column(
+                        Modifier.width(280.dp)
+                            .background(Tokens.panel, RoundedCornerShape(8.dp))
+                            .border(1.dp, Tokens.edgeHi, RoundedCornerShape(8.dp))
+                            .padding(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        BasicText(Texts.PROJECT_HEADING, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), style = TextStyle(fontFamily = sans, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Tokens.faint))
+                        if (projects.entries.size > PROJECT_SEARCH_FROM) {
+                            val focus = remember { FocusRequester() }
+                            LaunchedEffect(Unit) { focus.requestFocus() }
+                            Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp).height(30.dp).border(1.dp, Tokens.edge, RoundedCornerShape(6.dp)).padding(horizontal = 8.dp), contentAlignment = Alignment.CenterStart) {
+                                if (query.isEmpty()) BasicText(Texts.PROJECT_SEARCH, style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.faint))
+                                BasicTextField(
+                                    value = query,
+                                    onValueChange = { query = it },
+                                    singleLine = true,
+                                    cursorBrush = SolidColor(Tokens.sand),
+                                    textStyle = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Tokens.text),
+                                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                                )
+                            }
+                        }
+                        Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                            val shown = projects.entries.filter { it.name.contains(query.trim(), ignoreCase = true) }
+                            shown.forEach { entry ->
+                                val on = entry.name == projects.selected
+                                Row(
+                                    Modifier.fillMaxWidth().height(34.dp)
+                                        .background(if (on) Tokens.raise else Color.Transparent, RoundedCornerShape(6.dp))
+                                        .clickable(role = Role.Button) {
+                                            projects.onSelect(entry.name)
+                                            open = false
+                                        }
+                                        .padding(horizontal = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    IconGlyph(AppIcon.FOLDER, if (on) Tokens.text else Tokens.muted)
+                                    BasicText(
+                                        entry.name,
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 1,
+                                        style = TextStyle(fontFamily = sans, fontSize = 13.sp, color = if (on) Tokens.text else Tokens.soft),
+                                    )
+                                    if (entry.waiting > 0) Box(Modifier.size(6.dp).background(Tokens.accent, RoundedCornerShape(3.dp)))
+                                    BasicText(entry.cards.toString(), style = TextStyle(fontFamily = mono, fontSize = 12.sp, color = Tokens.faint))
+                                    if (on) IconGlyph(AppIcon.CHECK, Tokens.text)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private const val PROJECT_SEARCH_FROM = 6
+
+/** The short name of a project repo (`owner/name`). */
+fun projectName(repo: String): String = repo.substringAfterLast('/')
 
 /** The Shipfloor mark: floor tape from the Inbox to Done, ending in a card, on a dark tile (docs/img/icon.svg). */
 @Composable

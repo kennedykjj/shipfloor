@@ -56,6 +56,15 @@ import shipfloor.core.QueueForecast
  */
 class BoardStateTest {
     @Test
+    fun `a card row carries the repo of its project and the short name drops the owner`() {
+        val card = CardFaceFixtures.parse("""{"id":"a1","title":"T","column":"INBOX","repo":"kennedykjj/pickio"}""")
+
+        assertThat(card?.repo).isEqualTo("kennedykjj/pickio")
+        assertThat(projectName("kennedykjj/pickio")).isEqualTo("pickio")
+        assertThat(CardFaceFixtures.parse("""{"id":"a1","title":"T","column":"INBOX"}""")?.repo).isNull()
+    }
+
+    @Test
     fun `the list of a column is filtered by title or number, ignoring case, and keeps what matches`() {
         val cards = listOf(
             BoardFixtures.aCard("a1b2c3d4", Column.INBOX, "Exportar eventos em CSV"),
